@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
 from django.http import JsonResponse
@@ -11,10 +12,17 @@ from django.utils.dateparse import parse_date
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
+from apps.studios.models import CourseProfessor
+
 from . import audit, services
 from .forms import BlackoutForm, ReservationEditForm
 from .models import AuditLog, Blackout, OpenSlot, Reservation
-from .permissions import editable_studios, require_edit, staff_required, viewable_studios
+from .permissions import (
+    editable_studios,
+    require_edit,
+    staff_required,
+    viewable_studios,
+)
 
 
 def _pick_studio(request, studios):
@@ -65,9 +73,9 @@ def events(request):
     is_manager = user.is_studio_staff or user.is_super_admin
     out = []
 
-    reservations = Reservation.objects.filter(
+    reservations = list(Reservation.objects.filter(
         studio__in=studios, date__range=(start, end), status=Reservation.Status.CONFIRMED,
-    ).select_related("studio", "professor", "course")
+    ).select_related("studio", "professor", "course"))
     reserved_slot_ids = set()
     for r in reservations:
         reserved_slot_ids.add(r.slot_id)
@@ -83,19 +91,31 @@ def events(request):
             "extendedProps": {"kind": "reservation", "id": r.pk, "studio": r.studio_id, "mine": mine},
         })
 
+    blackouts = list(Blackout.objects.filter(
+        Q(studio__in=studios) | Q(studio__isnull=True), date__range=(start, end),
+    ).select_related("studio"))
+    today = timezone.localdate()
     for s in OpenSlot.objects.filter(studio__in=studios, date__range=(start, end)).select_related("studio"):
-        if s.pk in reserved_slot_ids:
+        # 예약·불가일과 겹치는 슬롯은 "예약 가능"으로 보이지 않게 한다.
+        if s.pk in reserved_slot_ids or any(
+            r.studio_id == s.studio_id and r.date == s.date
+            and services.overlaps(r.start_time, r.end_time, s.start_time, s.end_time)
+            for r in reservations
+        ) or any(
+            b.date == s.date and (b.studio_id in (None, s.studio_id))
+            and (b.is_all_day or services.overlaps(b.start_time, b.end_time, s.start_time, s.end_time))
+            for b in blackouts
+        ):
+            continue
+        if not is_manager and s.date < today:
             continue
         out.append({
             "id": f"s{s.pk}", "title": " ".join(x for x in [s.studio.code, s.label, "예약 가능"] if x),
             "start": _hhmm(s.date, s.start_time), "end": _hhmm(s.date, s.end_time),
             "color": "#d1f0dc", "textColor": "#155d33", "borderColor": "#7ccf9b",
-            "extendedProps": {"kind": "slot", "id": s.pk, "studio": s.studio_id},
+            "extendedProps": {"kind": "slot", "id": s.pk, "studio": s.studio_id, "past": s.date < today},
         })
 
-    blackouts = Blackout.objects.filter(
-        Q(studio__in=studios) | Q(studio__isnull=True), date__range=(start, end),
-    ).select_related("studio")
     for b in blackouts:
         where = b.studio.code if b.studio else "전체"
         ev = {
@@ -257,3 +277,27 @@ def reservation_cancel(request, pk):
     if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
         return redirect(nxt)
     return redirect("booking:reservations")
+
+
+@staff_required
+def reservation_new(request):
+    """담당자 대리 예약: 열린 슬롯 하나에 과목·교수를 골라 예약한다."""
+    slot = get_object_or_404(OpenSlot.objects.select_related("studio"), pk=request.GET.get("slot") or request.POST.get("slot") or 0)
+    require_edit(request.user, slot.studio)
+    pairs = list(
+        CourseProfessor.objects.filter(course__studio=slot.studio, course__is_active=True)
+        .select_related("course", "professor").order_by("course__name", "professor__name")
+    )
+    if request.method == "POST":
+        pair = next((p for p in pairs if str(p.pk) == request.POST.get("pair")), None)
+        if pair is None:
+            messages.error(request, "과목·교수를 선택해 주세요.")
+        else:
+            try:
+                services.book_slot(request.user, pair.professor, pair.course, slot, memo=request.POST.get("memo", "")[:500])
+            except ValidationError as e:
+                messages.error(request, " ".join(e.messages))
+            else:
+                messages.success(request, f"{pair.professor.name} 교수 예약을 등록했습니다.")
+                return redirect("booking:calendar")
+    return render(request, "booking/reservation_new.html", {"slot": slot, "pairs": pairs})

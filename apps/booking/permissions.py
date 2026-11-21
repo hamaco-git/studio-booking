@@ -56,3 +56,16 @@ def require_edit(user, studio):
         return
     if not can_edit_studio(user, studio):
         raise PermissionDenied
+
+
+def professor_required(view):
+    """교수만 접근."""
+
+    @login_required
+    @wraps(view)
+    def wrapper(request, *args, **kwargs):
+        if not request.user.is_professor:
+            raise PermissionDenied
+        return view(request, *args, **kwargs)
+
+    return wrapper

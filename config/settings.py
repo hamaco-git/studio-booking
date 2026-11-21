@@ -104,3 +104,6 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 from django.contrib.messages import constants as message_constants  # noqa: E402
 
 MESSAGE_TAGS = {message_constants.ERROR: "danger"}
+
+# 교수 본인 예약 취소 마감: 촬영일 N일 전까지 (그 이후는 담당자에게 요청)
+PROFESSOR_CANCEL_DAYS_BEFORE = env.int("PROFESSOR_CANCEL_DAYS_BEFORE", default=2)

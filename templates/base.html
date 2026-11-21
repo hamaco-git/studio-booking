@@ -20,6 +20,13 @@
       <li class="nav-item"><a class="nav-link{% if u == 'reservations' or u == 'reservation_edit' %} active{% endif %}" href="{% url 'booking:reservations' %}">예약 목록</a></li>
     </ul>
     {% endwith %}
+    {% elif user.is_professor %}
+    {% with u=request.resolver_match.url_name %}
+    <ul class="navbar-nav me-auto">
+      <li class="nav-item"><a class="nav-link{% if u == 'book' %} active{% endif %}" href="{% url 'booking:book' %}">촬영 예약</a></li>
+      <li class="nav-item"><a class="nav-link{% if u == 'my_reservations' %} active{% endif %}" href="{% url 'booking:my_reservations' %}">내 예약</a></li>
+    </ul>
+    {% endwith %}
     {% endif %}
     <div class="d-flex align-items-center gap-3">
       <span class="text-secondary small">{{ user.name }} · {{ user.get_role_display }}</span>
