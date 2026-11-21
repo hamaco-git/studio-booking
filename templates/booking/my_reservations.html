@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}내 예약 · 스튜디오 예약{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+  <h1 class="h4 m-0 me-auto">내 예약</h1>
+  <a class="btn btn-primary" href="{% url 'booking:book' %}">새 예약</a>
+</div>
+
+<h2 class="h6">예정된 촬영</h2>
+<div class="card shadow-sm mb-4"><div class="table-responsive">
+  <table class="table align-middle mb-0">
+    <thead class="table-light"><tr><th>날짜</th><th>시간</th><th>스튜디오</th><th>과목</th><th>메모</th><th></th></tr></thead>
+    <tbody>
+    {% for r, can_cancel, deadline in rows %}
+      <tr>
+        <td>{{ r.date|date:"Y-m-d (D)" }}</td>
+        <td>{{ r.start_time|time:"H:i" }}~{{ r.end_time|time:"H:i" }}</td>
+        <td>{{ r.studio.name }}</td>
+        <td>{{ r.course.name }}</td>
+        <td class="small">{{ r.memo }}</td>
+        <td class="text-end">
+          {% if can_cancel %}
+          <form method="post" action="{% url 'booking:my_cancel' r.pk %}" class="m-0" onsubmit="return confirm('이 예약을 취소할까요?');">{% csrf_token %}
+            <button class="btn btn-sm btn-outline-danger">취소</button>
+            <div class="small text-secondary">{{ deadline|date:"n/j" }}까지 가능</div>
+          </form>
+          {% else %}
+          <span class="small text-secondary">취소 기한 지남<br>담당자에게 문의</span>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="text-center text-secondary py-4">예정된 예약이 없습니다.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+
+<h2 class="h6">지난 예약·취소된 예약</h2>
+<div class="card shadow-sm"><div class="table-responsive">
+  <table class="table table-sm align-middle mb-0">
+    <thead class="table-light"><tr><th>날짜</th><th>시간</th><th>스튜디오</th><th>과목</th><th>상태</th></tr></thead>
+    <tbody>
+    {% for r in past %}
+      <tr class="text-secondary">
+        <td>{{ r.date|date:"Y-m-d (D)" }}</td>
+        <td>{{ r.start_time|time:"H:i" }}~{{ r.end_time|time:"H:i" }}</td>
+        <td>{{ r.studio.name }}</td>
+        <td>{{ r.course.name }}</td>
+        <td>{% if r.status == 'CANCELLED' %}취소{% else %}촬영 완료{% endif %}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="text-center text-secondary py-3">없습니다.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

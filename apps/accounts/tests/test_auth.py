@@ -20,10 +20,10 @@ class AuthFlowTest(TestCase):
             "new_password1": "Studio-new-2027!",
             "new_password2": "Studio-new-2027!",
         })
-        self.assertRedirects(res, reverse("home"))
+        self.assertRedirects(res, reverse("home"), fetch_redirect_response=False)
         self.user.refresh_from_db()
         self.assertFalse(self.user.must_change_password)
-        self.assertEqual(self.client.get(reverse("home")).status_code, 200)
+        self.assertRedirects(self.client.get(reverse("home")), reverse("booking:book"))
 
     def test_super_role_gets_admin_rights(self):
         u = User.objects.create_user("admin@wcu.ac.kr", password="x", name="관리자", role=User.Role.SUPER)

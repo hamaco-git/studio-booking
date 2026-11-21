@@ -158,3 +158,64 @@ def create_blackouts(user, studio, start, end, start_time, end_time, reason):
     if start_time:
         conflicts = conflicts.filter(start_time__lt=end_time, end_time__gt=start_time)
     return created, list(conflicts.select_related("studio", "professor", "course"))
+
+
+# ── 예약 신청·취소 ────────────────────────────────────────
+
+
+def professor_courses(professor):
+    """교수가 예약할 수 있는 과목 (사용 중인 과목, 사용 중인 스튜디오)."""
+    from apps.studios.models import Course
+
+    return Course.objects.filter(
+        professors=professor, is_active=True, studio__is_active=True,
+    ).select_related("studio", "semester").order_by("name")
+
+
+def book_slot(actor, professor, course, slot, memo=""):
+    """슬롯 하나를 예약한다. actor는 교수 본인 또는 대리 예약하는 담당자.
+
+    규칙 위반이면 ValidationError, 동시에 다른 사람이 먼저 예약하면 ValidationError("이미 예약된…").
+    """
+    from django.core.exceptions import ValidationError
+    from django.utils import timezone
+
+    if slot.date < timezone.localdate():
+        raise ValidationError("지난 날짜는 예약할 수 없습니다.")
+    r = Reservation(
+        studio=slot.studio, course=course, professor=professor, slot=slot,
+        date=slot.date, start_time=slot.start_time, end_time=slot.end_time,
+        memo=memo, created_by=actor, updated_by=actor,
+    )
+    r.full_clean()
+    try:
+        with transaction.atomic():
+            r.save()
+    except IntegrityError:
+        raise ValidationError("방금 다른 분이 먼저 예약했습니다. 다른 시간을 선택해 주세요.")
+    audit.log(actor, AuditLog.Action.CREATE, r, after=audit.snapshot(r))
+    return r
+
+
+def cancel_deadline(reservation):
+    """교수 본인이 취소할 수 있는 마지막 날짜 (촬영일 N일 전)."""
+    from django.conf import settings
+
+    return reservation.date - timedelta(days=settings.PROFESSOR_CANCEL_DAYS_BEFORE)
+
+
+def professor_can_cancel(reservation):
+    from django.utils import timezone
+
+    return (
+        reservation.status == Reservation.Status.CONFIRMED
+        and timezone.localdate() <= cancel_deadline(reservation)
+    )
+
+
+def cancel_reservation(actor, reservation):
+    before = audit.snapshot(reservation)
+    reservation.status = Reservation.Status.CANCELLED
+    reservation.updated_by = actor
+    reservation.save(update_fields=["status", "updated_by", "updated_at"])
+    audit.log(actor, AuditLog.Action.CANCEL, reservation, before=before, after=audit.snapshot(reservation))
