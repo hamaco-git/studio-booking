@@ -8,4 +8,5 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("apps.accounts.urls")),
     path("", include("apps.booking.urls")),
+    path("manage/", include("apps.manage.urls")),
 ]

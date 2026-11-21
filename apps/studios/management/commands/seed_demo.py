@@ -44,7 +44,8 @@ class Command(BaseCommand):
 
         today = timezone.localdate()
         sem, _ = Semester.objects.get_or_create(
-            name="데모학기", defaults={"start_date": today - timedelta(days=30), "end_date": today + timedelta(days=120)}
+            name="데모학기", defaults={"start_date": today - timedelta(days=30), "end_date": today + timedelta(days=120),
+                                    "is_current": not Semester.objects.filter(is_current=True).exists()}
         )
         courses = []
         for i, p in enumerate(profs):

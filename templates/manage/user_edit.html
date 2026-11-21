@@ -1,0 +1,35 @@
+{% extends "manage/_base.html" %}
+{% block title %}계정 · 관리{% endblock %}
+{% block manage %}
+<div class="row g-4">
+  <div class="col-lg-6"><div class="card shadow-sm"><div class="card-body">
+    <h2 class="h5 mb-3">{% if target %}{{ target.name }} 계정{% else %}계정 추가{% endif %}</h2>
+    <form method="post">{% csrf_token %}
+      {% for f in form %}{% if f.name == 'is_active' %}
+        <div class="form-check mb-3">{{ f }}<label class="form-check-label" for="{{ f.id_for_label }}">사용 중 (해제하면 로그인할 수 없습니다)</label></div>
+      {% else %}
+        <div class="mb-3"><label class="form-label" for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}
+          {% for e in f.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+      {% endif %}{% endfor %}
+      {% if not target %}<p class="text-secondary small">저장하면 임시 비밀번호가 만들어져 화면 위에 한 번 표시됩니다. 첫 로그인 때 새 비밀번호로 바꾸게 됩니다.</p>{% endif %}
+      <div class="d-flex gap-2">
+        <button class="btn btn-primary">저장</button>
+        <a class="btn btn-outline-secondary" href="{% url 'manage:users' %}">목록</a>
+      </div>
+    </form>
+  </div></div></div>
+  {% if target %}
+  <div class="col-lg-6"><div class="card shadow-sm"><div class="card-body">
+    <h2 class="h6">비밀번호 초기화</h2>
+    <p class="small text-secondary">비밀번호를 잊은 경우 임시 비밀번호를 새로 만듭니다. 기존 비밀번호는 더 이상 쓸 수 없습니다.</p>
+    <form method="post" action="{% url 'manage:user_reset_password' target.pk %}" onsubmit="return confirm('비밀번호를 초기화할까요?');">{% csrf_token %}
+      <button class="btn btn-outline-danger">임시 비밀번호 발급</button>
+    </form>
+    {% if target.is_professor %}
+    <hr><h2 class="h6">담당 과목</h2>
+    <ul class="small mb-0">{% for c in target.courses.all %}<li>[{{ c.semester }}] {{ c.name }} · {{ c.studio.name }}</li>{% empty %}<li class="text-secondary">없음 (과목 화면에서 배정)</li>{% endfor %}</ul>
+    {% endif %}
+  </div></div></div>
+  {% endif %}
+</div>
+{% endblock %}

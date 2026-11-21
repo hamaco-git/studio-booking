@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}예약 목록 · 스튜디오 예약{% endblock %}
 {% block content %}
-<h1 class="h4 mb-3">예약 목록</h1>
+<div class="d-flex align-items-center mb-3">
+  <h1 class="h4 m-0 me-auto">예약 목록</h1>
+  <a class="btn btn-outline-success" href="{% url 'booking:reservations_export' %}?{{ query }}">엑셀 내려받기</a>
+</div>
 <form method="get" class="row g-2 align-items-end mb-3">
   <div class="col-auto"><label class="form-label small" for="f-start">시작일</label><input id="f-start" type="date" name="start" value="{{ start|date:'Y-m-d' }}" class="form-control"></div>
   <div class="col-auto"><label class="form-label small" for="f-end">종료일</label><input id="f-end" type="date" name="end" value="{{ end|date:'Y-m-d' }}" class="form-control"></div>

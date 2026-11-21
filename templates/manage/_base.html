@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+{% with u=request.resolver_match.url_name %}
+<ul class="nav nav-tabs mb-4">
+  <li class="nav-item"><a class="nav-link{% if u == 'courses' or u == 'course_new' or u == 'course_edit' %} active{% endif %}" href="{% url 'manage:courses' %}">과목·교수 배정</a></li>
+  <li class="nav-item"><a class="nav-link{% if u == 'semesters' %} active{% endif %}" href="{% url 'manage:semesters' %}">학기</a></li>
+  <li class="nav-item"><a class="nav-link{% if u == 'users' or u == 'user_new' or u == 'user_edit' %} active{% endif %}" href="{% url 'manage:users' %}">계정</a></li>
+  <li class="nav-item"><a class="nav-link{% if u == 'users_import' %} active{% endif %}" href="{% url 'manage:users_import' %}">교수 일괄 등록</a></li>
+  <li class="nav-item"><a class="nav-link{% if u == 'logs' %} active{% endif %}" href="{% url 'manage:logs' %}">변경 이력</a></li>
+</ul>
+{% endwith %}
+{% block manage %}{% endblock %}
+{% endblock %}
