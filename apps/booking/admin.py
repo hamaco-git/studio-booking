@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AuditLog, Blackout, OpenSlot, Reservation
+from .models import AuditLog, Blackout, OpenSlot, Reservation, SlotTemplate
 
 
 class CreatedByMixin:
@@ -44,3 +44,8 @@ class AuditLogAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+
+@admin.register(SlotTemplate)
+class SlotTemplateAdmin(admin.ModelAdmin):
+    list_display = ("label", "start_time", "end_time", "order", "is_active")

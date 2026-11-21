@@ -23,6 +23,30 @@ def _ts(time_field):
 TIME_RANGE = TsRange(_ts("start_time"), _ts("end_time"))
 
 
+class SlotTemplate(models.Model):
+    """주간 슬롯 설정 화면에 나오는 시간대 (예: 오전 09:00~12:00, 오후 13:00~18:00).
+
+    슈퍼관리자가 관리자 화면에서 바꿀 수 있다.
+    """
+
+    label = models.CharField("이름", max_length=20)
+    start_time = models.TimeField("시작")
+    end_time = models.TimeField("종료")
+    order = models.PositiveSmallIntegerField("순서", default=0)
+    is_active = models.BooleanField("사용 중", default=True)
+
+    class Meta:
+        verbose_name = "시간대 템플릿"
+        verbose_name_plural = "시간대 템플릿"
+        ordering = ["order", "start_time"]
+        constraints = [
+            models.CheckConstraint(condition=Q(end_time__gt=F("start_time")), name="template_time_valid"),
+        ]
+
+    def __str__(self):
+        return f"{self.label} {self.start_time:%H:%M}~{self.end_time:%H:%M}"
+
+
 class OpenSlot(models.Model):
     """담당자가 연 예약 가능 시간대 슬롯 (예: 오전 09:00~12:00).
 

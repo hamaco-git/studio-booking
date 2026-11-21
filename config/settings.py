@@ -97,3 +97,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SESSION_COOKIE_SECURE = env("SECURE_COOKIES")
 CSRF_COOKIE_SECURE = env("SECURE_COOKIES")
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Django 메시지 → Bootstrap 알림 색상
+from django.contrib.messages import constants as message_constants  # noqa: E402
+
+MESSAGE_TAGS = {message_constants.ERROR: "danger"}

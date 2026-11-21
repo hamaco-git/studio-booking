@@ -22,4 +22,6 @@ def home(request):
     """역할별 첫 화면. 예약 달력 등 실제 화면은 다음 단계에서 붙인다."""
     if request.user.must_change_password:
         return redirect("password_change")
+    if request.user.is_studio_staff or request.user.is_super_admin:
+        return redirect("booking:calendar")
     return render(request, "home.html")

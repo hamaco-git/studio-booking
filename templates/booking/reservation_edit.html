@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}예약 수정 · 스튜디오 예약{% endblock %}
+{% block content %}
+<h1 class="h4 mb-3">예약 수정</h1>
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card shadow-sm"><div class="card-body">
+      <p class="mb-3"><strong>{{ r.professor.name }}</strong> 교수 · {{ r.course.name }}</p>
+      <form method="post">{% csrf_token %}
+        {% if form.non_field_errors %}<div class="alert alert-danger small">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>{% endif %}
+        {% for field in form %}
+        <div class="mb-3">
+          <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+          {% for e in field.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+        </div>
+        {% endfor %}
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary">저장</button>
+          <a class="btn btn-outline-secondary" href="{% url 'booking:reservations' %}">목록</a>
+        </div>
+      </form>
+      <hr>
+      <form method="post" action="{% url 'booking:reservation_cancel' r.pk %}" onsubmit="return confirm('이 예약을 취소할까요?');">{% csrf_token %}
+        <button class="btn btn-outline-danger">예약 취소</button>
+      </form>
+      <p class="text-secondary small mt-2">시간을 바꾸면 담당자가 열어 둔 슬롯 안이어야 하며, 다른 예약·불가일과 겹칠 수 없습니다.</p>
+    </div></div>
+  </div>
+  <div class="col-lg-6">
+    <h2 class="h6">변경 이력</h2>
+    <ul class="list-group small">
+      {% for h in history %}<li class="list-group-item">{{ h.created_at|date:"Y-m-d H:i" }} · {{ h.user.name|default:"-" }} · {{ h.get_action_display }}</li>
+      {% empty %}<li class="list-group-item text-secondary">이력이 없습니다.</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+{% endblock %}
