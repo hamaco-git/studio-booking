@@ -1,0 +1,40 @@
+{% extends "manage/_base.html" %}
+{% block title %}계정 · 관리{% endblock %}
+{% block manage %}
+<form method="get" class="row g-2 align-items-end mb-3">
+  {% if roles %}<div class="col-auto"><label class="form-label small" for="f-role">역할</label>
+    <select id="f-role" name="role" class="form-select"><option value="">전체</option>
+      {% for v, l in roles %}<option value="{{ v }}" {% if role == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select></div>{% endif %}
+  <div class="col-auto"><label class="form-label small" for="f-q">이름·아이디</label><input id="f-q" name="q" value="{{ q }}" class="form-control" placeholder="검색"></div>
+  <div class="col-auto form-check ms-2 mb-2"><input class="form-check-input" type="checkbox" name="inactive" value="1" id="f-in" {% if inactive == '1' %}checked{% endif %}><label class="form-check-label" for="f-in">중지된 계정 포함</label></div>
+  <div class="col-auto"><button class="btn btn-outline-primary">조회</button></div>
+  <div class="col text-end">
+    <a class="btn btn-outline-secondary" href="{% url 'manage:users_import' %}">CSV 일괄 등록</a>
+    <a class="btn btn-primary" href="{% url 'manage:user_new' %}">{% if roles %}계정{% else %}교수 계정{% endif %} 추가</a>
+  </div>
+</form>
+<div class="card shadow-sm"><div class="table-responsive">
+  <table class="table align-middle mb-0">
+    <thead class="table-light"><tr><th>이름</th><th>아이디</th><th>역할</th><th>담당 과목</th><th>최근 로그인</th><th>상태</th><th></th></tr></thead>
+    <tbody>
+    {% for u in page %}
+      <tr{% if not u.is_active %} class="text-secondary"{% endif %}>
+        <td>{{ u.name }}</td><td>{{ u.username }}</td><td>{{ u.get_role_display }}</td>
+        <td class="small">{% for c in u.courses.all %}{{ c.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
+        <td class="small">{{ u.last_login|date:"Y-m-d H:i"|default:"-" }}</td>
+        <td>{% if u.is_active %}{% if u.must_change_password %}<span class="badge text-bg-warning">첫 로그인 전</span>{% else %}사용{% endif %}{% else %}중지{% endif %}</td>
+        <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'manage:user_edit' u.pk %}">수정</a></td>
+      </tr>
+    {% empty %}<tr><td colspan="7" class="text-center text-secondary py-4">계정이 없습니다.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% if page.has_other_pages %}
+<nav class="mt-3"><ul class="pagination">
+  {% if page.has_previous %}<li class="page-item"><a class="page-link" href="?page={{ page.previous_page_number }}&role={{ role }}&q={{ q }}&inactive={{ inactive }}">이전</a></li>{% endif %}
+  <li class="page-item disabled"><span class="page-link">{{ page.number }} / {{ page.paginator.num_pages }}</span></li>
+  {% if page.has_next %}<li class="page-item"><a class="page-link" href="?page={{ page.next_page_number }}&role={{ role }}&q={{ q }}&inactive={{ inactive }}">다음</a></li>{% endif %}
+</ul></nav>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "manage/_base.html" %}
+{% block title %}과목 {% if course %}수정{% else %}추가{% endif %} · 관리{% endblock %}
+{% block manage %}
+<div class="row"><div class="col-lg-7"><div class="card shadow-sm"><div class="card-body">
+  <h2 class="h5 mb-3">과목 {% if course %}수정{% else %}추가{% endif %}</h2>
+  <form method="post">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger small">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+    {% for f in form %}{% if f.name == 'is_active' %}
+      <div class="form-check mb-3">{{ f }}<label class="form-check-label" for="{{ f.id_for_label }}">사용 중 (해제하면 교수 예약 화면에서 빠집니다)</label></div>
+    {% else %}
+      <div class="mb-3"><label class="form-label" for="{{ f.id_for_label }}">{{ f.label }}</label>{{ f }}
+        {% if f.help_text %}<div class="form-text">{{ f.help_text }}</div>{% endif %}
+        {% for e in f.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+    {% endif %}{% endfor %}
+    <div class="d-flex gap-2">
+      <button class="btn btn-primary">저장</button>
+      <a class="btn btn-outline-secondary" href="{% url 'manage:courses' %}">목록</a>
+    </div>
+  </form>
+</div></div></div></div>
+{% endblock %}

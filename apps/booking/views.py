@@ -5,7 +5,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.dateparse import parse_date
@@ -213,10 +213,9 @@ def blackout_delete(request, pk):
 # ── 예약 관리 ──────────────────────────────────────────────
 
 
-@staff_required
-def reservations(request):
-    user = request.user
-    studios = viewable_studios(user)
+def _filtered_reservations(request):
+    """예약 목록·엑셀 내려받기 공통 조건."""
+    studios = viewable_studios(request.user)
     qs = Reservation.objects.filter(studio__in=studios).select_related("studio", "professor", "course")
     start = parse_date(request.GET.get("start") or "") or timezone.localdate()
     end = parse_date(request.GET.get("end") or "") or start + timedelta(days=30)
@@ -229,12 +228,53 @@ def reservations(request):
     q = (request.GET.get("q") or "").strip()
     if q:
         qs = qs.filter(Q(professor__name__icontains=q) | Q(course__name__icontains=q))
-    editable_ids = set(editable_studios(user).values_list("pk", flat=True))
-    return render(request, "booking/reservations.html", {
-        "rows": [(r, r.studio_id in editable_ids) for r in qs.order_by("date", "start_time")],
-        "studios": studios, "start": start, "end": end, "sid": sid or "", "q": q,
-        "status": request.GET.get("status", ""),
-    })
+    ctx = {"studios": studios, "start": start, "end": end, "sid": sid or "", "q": q,
+           "status": request.GET.get("status", "")}
+    return qs.order_by("date", "start_time", "studio__code"), ctx
+
+
+@staff_required
+def reservations(request):
+    qs, ctx = _filtered_reservations(request)
+    editable_ids = set(editable_studios(request.user).values_list("pk", flat=True))
+    ctx["rows"] = [(r, r.studio_id in editable_ids) for r in qs]
+    ctx["query"] = request.GET.urlencode()
+    return render(request, "booking/reservations.html", ctx)
+
+
+@staff_required
+def reservations_export(request):
+    """예약 목록을 엑셀(xlsx)로 내려받기. 화면의 조회 조건을 그대로 사용한다."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+    from openpyxl.utils import get_column_letter
+
+    qs, ctx = _filtered_reservations(request)
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "예약"
+    headers = ["날짜", "요일", "시작", "종료", "스튜디오", "교수", "과목", "상태", "메모", "등록자", "등록일시"]
+    ws.append(headers)
+    for c in ws[1]:
+        c.font = Font(bold=True)
+    days = "월화수목금토일"
+    for r in qs.select_related("created_by"):
+        ws.append([
+            r.date, days[r.date.weekday()], r.start_time.strftime("%H:%M"), r.end_time.strftime("%H:%M"),
+            r.studio.name, r.professor.name, r.course.name, r.get_status_display(), r.memo,
+            r.created_by.name if r.created_by else "",
+            timezone.localtime(r.created_at).strftime("%Y-%m-%d %H:%M"),
+        ])
+    for i, w in enumerate([12, 5, 7, 7, 12, 12, 24, 7, 30, 12, 17], 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+    for row in ws.iter_rows(min_row=2, max_col=1):
+        row[0].number_format = "yyyy-mm-dd"
+    ws.freeze_panes = "A2"
+    resp = HttpResponse(content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    name = f"reservations_{ctx['start']:%Y%m%d}-{ctx['end']:%Y%m%d}.xlsx"
+    resp["Content-Disposition"] = f'attachment; filename="{name}"'
+    wb.save(resp)
+    return resp
 
 
 @staff_required

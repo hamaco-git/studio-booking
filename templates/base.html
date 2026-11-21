@@ -18,6 +18,7 @@
       <li class="nav-item"><a class="nav-link{% if u == 'week_slots' %} active{% endif %}" href="{% url 'booking:week_slots' %}">주간 슬롯 설정</a></li>
       <li class="nav-item"><a class="nav-link{% if u == 'blackouts' %} active{% endif %}" href="{% url 'booking:blackouts' %}">촬영 불가일</a></li>
       <li class="nav-item"><a class="nav-link{% if u == 'reservations' or u == 'reservation_edit' %} active{% endif %}" href="{% url 'booking:reservations' %}">예약 목록</a></li>
+      <li class="nav-item"><a class="nav-link{% if request.resolver_match.namespace == 'manage' %} active{% endif %}" href="{% url 'manage:courses' %}">관리</a></li>
     </ul>
     {% endwith %}
     {% elif user.is_professor %}
