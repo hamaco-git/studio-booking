@@ -1,0 +1,12 @@
+[project]
+name = "studio-booking"
+version = "0.1.0"
+description = "세계사이버대학 스튜디오 촬영 예약 시스템"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "django>=5.2,<5.3",
+    "django-environ>=0.11",
+    "gunicorn>=23",
+    "psycopg[binary]>=3.2",
+]
