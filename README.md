@@ -15,7 +15,7 @@
 | 1 | 협의·설계 확정 | 완료 |
 | 2 | 환경 구성 (프로젝트 구조, 설정, 설치 안내) | 완료 |
 | 3 | DB·계정 (테이블 10개, 로그인, 역할, 첫 로그인 비밀번호 변경) | 완료 |
-| 4 | 담당자 기능 (주간 슬롯 설정, 불가일, 현황 달력) | 예정 |
+| 4 | 담당자 기능 (현황 달력, 주간 슬롯 설정, 촬영 불가일, 예약 수정·취소) | 완료 (과목·배정 관리 화면은 6단계에서) |
 | 5 | 교수 예약 기능 (예약 달력, 신청·취소) | 예정 |
 | 6 | 계정 일괄 등록, 엑셀 내려받기, 변경 이력 | 예정 |
 | 7 | 사용자 테스트 | 예정 |
@@ -53,7 +53,6 @@ psql postgres -c "CREATE DATABASE studio_booking OWNER studio;"
 ```bash
 git clone https://github.com/hamaco-git/studio-booking.git
 cd studio-booking
-git checkout feature/project-setup   # PR #1 병합 전에만 필요 (병합 후에는 생략)
 cp .env.example .env        # 개발용 기본값 그대로 사용 가능
 uv sync                     # Python 3.12와 라이브러리 설치
 ```
@@ -85,7 +84,30 @@ uv run python manage.py runserver
 관리자 화면에서 학기, 과목(지정 스튜디오·담당 교수), 담당자·교수 계정, 예약 가능 슬롯을 등록해 볼 수 있습니다.
 새로 만든 담당자·교수 계정은 처음 로그인할 때 비밀번호를 바꾸도록 안내됩니다.
 
-### 6. 테스트
+### 6. 데모 데이터로 둘러보기 (선택)
+
+```bash
+uv run python manage.py seed_demo
+```
+
+담당자 `staff1@demo.local`~`staff4@demo.local`, 교수 `prof1@demo.local`~`prof6@demo.local`
+(비밀번호 모두 `demo1234!`)과 데모 과목, 이번 주·다음 주 평일 오전/오후 슬롯, 예약 몇 건이 만들어집니다.
+`.env`의 `DEBUG=True`일 때만 실행되므로 운영 서버에서는 동작하지 않습니다.
+
+담당자로 로그인하면 다음 메뉴가 보입니다.
+
+| 메뉴 | 내용 |
+| --- | --- |
+| 현황 달력 | 4개 스튜디오의 예약·예약 가능 슬롯·촬영 불가일을 월/주/목록으로 보기. 담당 스튜디오 예약을 누르면 수정 화면 |
+| 주간 슬롯 설정 | 주를 고르고 요일별 오전/오후 칸을 체크해 저장. "지난주 설정 복사" 지원. 예약이 있는 칸은 잠김 |
+| 촬영 불가일 | 날짜(또는 기간)·종일/시간·사유 등록, 삭제. 겹치는 확정 예약이 있으면 경고 |
+| 예약 목록 | 기간·스튜디오·교수/과목 검색, 수정·취소 (모든 변경은 이력에 기록) |
+
+담당자는 자기 담당 스튜디오만 수정할 수 있고 다른 스튜디오는 조회만 됩니다.
+"전체 스튜디오" 불가일은 슈퍼관리자만 등록할 수 있습니다.
+오전/오후 시간대는 슈퍼관리자가 관리자 화면의 "시간대 템플릿"에서 바꿀 수 있습니다.
+
+### 7. 테스트
 
 ```bash
 uv run python manage.py test
@@ -99,6 +121,7 @@ apps/accounts/     계정·역할·로그인
 apps/studios/      스튜디오, 담당자 배정, 학기, 과목, 과목 담당 교수
 apps/booking/      예약 가능 슬롯, 촬영 불가일, 예약, 변경 이력
 templates/         화면 템플릿 (Bootstrap 5)
+static/vendor/     Bootstrap, FullCalendar 파일 (인터넷 CDN 없이 동작하도록 저장소에 포함)
 docs/              설계·배포 문서
 ```
 
@@ -112,6 +135,7 @@ docs/              설계·배포 문서
 | studios_semester | 학기 |
 | studios_course | 과목 (학기별, 지정 스튜디오 1개) |
 | studios_courseprofessor | 과목 ↔ 교수 (다대다) |
+| booking_slottemplate | 주간 설정 화면의 시간대 (기본: 오전 09~12, 오후 13~18) |
 | booking_openslot | 담당자가 연 예약 가능 시간대 슬롯 |
 | booking_blackout | 촬영 불가일 (스튜디오 비우면 전체, 시간 비우면 종일) |
 | booking_reservation | 예약 (삭제 대신 상태를 '취소'로 변경) |

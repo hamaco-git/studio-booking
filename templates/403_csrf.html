@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}다시 시도해 주세요 · 스튜디오 예약{% endblock %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-7 col-lg-6">
+    <div class="card shadow-sm"><div class="card-body p-4">
+      <h1 class="h4 mb-3">새로고침 후 다시 시도해 주세요</h1>
+      <p class="mb-2">화면을 연 뒤 시간이 지났거나, 다른 탭에서 로그인·로그아웃을 해서 요청을 처리하지 못했습니다.</p>
+      <p class="text-secondary small mb-4">입력하신 내용은 저장되지 않았습니다. 페이지를 다시 열고 한 번 더 진행해 주세요.</p>
+      <div class="d-flex gap-2">
+        <a class="btn btn-primary" href="{{ retry_url }}">페이지 다시 열기</a>
+        <a class="btn btn-outline-secondary" href="{% url 'home' %}">처음 화면으로</a>
+      </div>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

@@ -96,4 +96,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # 운영(HTTPS) 환경에서는 .env에 SECURE_COOKIES=True
 SESSION_COOKIE_SECURE = env("SECURE_COOKIES")
 CSRF_COOKIE_SECURE = env("SECURE_COOKIES")
+# 보안 토큰 검증 실패 시 한국어 안내 화면 (templates/403_csrf.html)
+CSRF_FAILURE_VIEW = "apps.accounts.views.csrf_failure"
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# Django 메시지 → Bootstrap 알림 색상
+from django.contrib.messages import constants as message_constants  # noqa: E402
+
+MESSAGE_TAGS = {message_constants.ERROR: "danger"}

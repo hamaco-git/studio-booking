@@ -22,4 +22,12 @@ def home(request):
     """역할별 첫 화면. 예약 달력 등 실제 화면은 다음 단계에서 붙인다."""
     if request.user.must_change_password:
         return redirect("password_change")
+    if request.user.is_studio_staff or request.user.is_super_admin:
+        return redirect("booking:calendar")
     return render(request, "home.html")
+
+
+def csrf_failure(request, reason=""):
+    """보안 토큰(CSRF) 검증 실패 시 영어 오류 화면 대신 한국어 안내를 보여 준다.
+    다른 탭에서 로그인·로그아웃해 토큰이 바뀐 뒤 오래된 화면에서 제출하면 주로 발생한다."""
+    return render(request, "403_csrf.html", {"retry_url": request.path}, status=403)
