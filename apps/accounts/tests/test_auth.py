@@ -33,3 +33,17 @@ class AuthFlowTest(TestCase):
         u = User.objects.create_superuser("root@wcu.ac.kr", "root@wcu.ac.kr", "x", name="관리자")
         self.assertEqual(u.role, User.Role.SUPER)
         self.assertFalse(u.must_change_password)
+
+
+class CsrfFailureTest(TestCase):
+    def test_stale_token_shows_korean_retry_page(self):
+        client = self.client_class(enforce_csrf_checks=True)
+        client.get(reverse("login"))
+        res = client.post(reverse("login"), {
+            "csrfmiddlewaretoken": "x" * 32,
+            "username": "a@wcu.ac.kr",
+            "password": "x",
+        })
+        self.assertEqual(res.status_code, 403)
+        self.assertContains(res, "새로고침 후 다시 시도해 주세요", status_code=403)
+        self.assertContains(res, f'href="{reverse("login")}"', status_code=403)
