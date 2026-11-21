@@ -30,9 +30,12 @@
 ```bash
 brew install uv postgresql@16 git
 brew services start postgresql@16
-echo 'export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"' >> ~/.zshrc
+grep -q 'postgresql@16/bin' ~/.zshrc || echo 'export PATH="/opt/homebrew/opt/postgresql@16/bin:$PATH"' >> ~/.zshrc
 source ~/.zshrc
 ```
+
+세 번째 줄은 `psql` 명령을 쓸 수 있게 PATH를 추가합니다. 이미 추가되어 있으면 다시 넣지 않으므로 여러 번 실행해도 됩니다.
+(Intel Mac은 경로가 `/usr/local/opt/postgresql@16/bin`입니다.)
 
 `uv`는 Python 3.12와 라이브러리를 프로젝트 안에 자동으로 설치해 주는 도구입니다.
 
@@ -50,6 +53,7 @@ psql postgres -c "CREATE DATABASE studio_booking OWNER studio;"
 ```bash
 git clone https://github.com/hamaco-git/studio-booking.git
 cd studio-booking
+git checkout feature/project-setup   # PR #1 병합 전에만 필요 (병합 후에는 생략)
 cp .env.example .env        # 개발용 기본값 그대로 사용 가능
 uv sync                     # Python 3.12와 라이브러리 설치
 ```
@@ -59,8 +63,15 @@ uv sync                     # Python 3.12와 라이브러리 설치
 ```bash
 uv run python manage.py migrate          # 테이블 생성
 uv run python manage.py seed_studios     # studio1~studio4 등록
-uv run python manage.py createsuperuser  # 슈퍼관리자 계정 만들기 (아이디는 이메일 권장)
+uv run python manage.py createsuperuser  # 슈퍼관리자 계정 만들기
 ```
+
+`createsuperuser`는 차례로 다음을 묻습니다.
+
+- 사용자 이름(로그인 ID): 학교 이메일 권장
+- 이메일 주소
+- 이름: 화면에 표시될 이름 (예: 홍길동)
+- 비밀번호, 비밀번호 확인: 너무 짧거나 쉬우면 경고가 나오며, `y`를 눌러 그대로 쓸 수도 있습니다.
 
 ### 5. 실행
 
