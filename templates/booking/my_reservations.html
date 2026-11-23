@@ -20,10 +20,11 @@
         <td class="small">{{ r.memo }}</td>
         <td class="text-end">
           {% if can_cancel %}
-          <form method="post" action="{% url 'booking:my_cancel' r.pk %}" class="m-0" onsubmit="return confirm('이 예약을 취소할까요?');">{% csrf_token %}
+          <form method="post" action="{% url 'booking:my_cancel' r.pk %}" class="m-0 d-inline-flex flex-wrap gap-1 justify-content-end" onsubmit="return confirm('이 예약을 취소할까요?');">{% csrf_token %}
+            <input name="reason" maxlength="200" class="form-control form-control-sm" style="width:10rem" placeholder="취소 사유(선택)" aria-label="취소 사유">
             <button class="btn btn-sm btn-outline-danger">취소</button>
-            <div class="small text-secondary">{{ deadline|date:"n/j" }}까지 가능</div>
           </form>
+          <div class="small text-secondary">{{ deadline|date:"n/j" }}까지 가능</div>
           {% else %}
           <span class="small text-secondary">취소 기한 지남<br>담당자에게 문의</span>
           {% endif %}
@@ -47,7 +48,7 @@
         <td>{{ r.start_time|time:"H:i" }}~{{ r.end_time|time:"H:i" }}</td>
         <td>{{ r.studio.name }}</td>
         <td>{{ r.course.name }}</td>
-        <td>{% if r.status == 'CANCELLED' %}취소{% else %}촬영 완료{% endif %}</td>
+        <td>{% if r.status == 'CONFIRMED' %}촬영일 지남{% else %}{{ r.get_status_display }}{% endif %}{% if r.cancel_reason %}<div class="small">{{ r.cancel_reason }}</div>{% endif %}</td>
       </tr>
     {% empty %}
       <tr><td colspan="5" class="text-center text-secondary py-3">없습니다.</td></tr>

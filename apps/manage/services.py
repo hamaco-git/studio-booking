@@ -10,11 +10,12 @@ from django.core.validators import validate_email
 from django.db import transaction
 
 from apps.accounts.models import User
+from apps.accounts.phone import normalize_phone, validate_phone
 from apps.booking import audit
 from apps.booking.models import AuditLog
 from apps.studios.models import Course
 
-CSV_HEADERS = ["이메일", "이름", "연락처", "과목코드"]
+CSV_HEADERS = ["이메일", "이름", "휴대폰 번호", "과목코드"]
 
 
 def temp_password():
@@ -62,14 +63,15 @@ def decode_csv(raw: bytes) -> str:
 
 
 def import_professors(actor, text, semester=None):
-    """CSV(이메일,이름,연락처,과목코드)로 교수 계정을 만들고 과목에 배정한다.
+    """CSV(이메일,이름,휴대폰 번호,과목코드)로 교수 계정을 만들고 과목에 배정한다.
 
-    과목코드는 세미콜론(;)으로 여러 개. 이미 있는 계정은 새로 만들지 않고 과목 배정만 한다.
+    과목코드는 세미콜론(;)으로 여러 개. 이미 있는 계정은 새로 만들지 않고 과목 배정만 하며,
+    휴대폰 번호 칸이 채워져 있으면 그 계정의 번호를 새 값으로 바꾼다.
     돌려주는 값: 행마다 dict(row, email, name, status, password, message)
     """
     reader = csv.reader(io.StringIO(text))
     rows = list(reader)
-    if rows and rows[0] and rows[0][0].strip() in ("이메일", "email", "Email"):
+    if rows and rows[0] and rows[0][0].strip().lstrip("\ufeff") in ("이메일", "email", "Email"):
         rows = rows[1:]
     results = []
     for i, cols in enumerate(rows, start=2):
@@ -84,6 +86,12 @@ def import_professors(actor, text, semester=None):
         except ValidationError:
             res.update(status="오류", message="이메일 형식이 올바르지 않습니다.")
             continue
+        try:
+            validate_phone(phone)
+        except ValidationError as e:
+            res.update(status="오류", message=e.messages[0])
+            continue
+        phone = normalize_phone(phone)
         code_list = [c.strip() for c in codes.split(";") if c.strip()]
         courses = []
         if code_list:
@@ -104,6 +112,12 @@ def import_professors(actor, text, semester=None):
                     continue
                 res["status"] = "기존 계정"
                 res["name"] = user.name
+                if phone and phone != user.phone:
+                    before = _user_snapshot(user)
+                    user.phone = phone
+                    user.save(update_fields=["phone"])
+                    log_update(actor, user, before)
+                    res["message"] = "휴대폰 번호 갱신"
             else:
                 if not name:
                     res.update(status="오류", message="이름이 비어 있습니다.")
@@ -114,5 +128,6 @@ def import_professors(actor, text, semester=None):
             for c in courses:
                 c.professors.add(user)
             if courses:
-                res["message"] = "배정: " + ", ".join(c.name for c in courses)
+                note = "배정: " + ", ".join(c.name for c in courses)
+                res["message"] = f"{res['message']} · {note}" if res["message"] else note
     return results

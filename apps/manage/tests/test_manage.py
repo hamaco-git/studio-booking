@@ -110,6 +110,27 @@ class UserManageTest(StaffBase):
         self.prof.refresh_from_db()
         self.assertFalse(self.prof.is_active)
 
+    def test_phone_saved_normalized_and_searchable(self):
+        self.client.force_login(self.staff)
+        res = self.client.post(reverse("manage:user_edit", args=[self.prof.pk]),
+                               {"username": self.prof.username, "name": self.prof.name, "phone": "01055556666",
+                                "is_active": "on"})
+        self.assertEqual(res.status_code, 302)
+        self.prof.refresh_from_db()
+        self.assertEqual(self.prof.phone, "010-5555-6666")
+        res = self.client.get(reverse("manage:users"), {"q": "55556666"})
+        self.assertContains(res, "010-5555-6666")
+        res = self.client.get(reverse("manage:users"), {"nophone": "1"})
+        self.assertNotContains(res, "010-5555-6666")
+        self.assertContains(res, self.other.name)
+
+    def test_invalid_phone_rejected(self):
+        self.client.force_login(self.staff)
+        res = self.client.post(reverse("manage:user_edit", args=[self.prof.pk]),
+                               {"username": self.prof.username, "name": self.prof.name, "phone": "12345",
+                                "is_active": "on"})
+        self.assertContains(res, "휴대폰 번호 형식")
+
     def test_list_hides_staff_for_staff(self):
         self.client.force_login(self.staff)
         res = self.client.get(reverse("manage:users"))
@@ -150,6 +171,26 @@ class ImportTest(StaffBase):
         res = self.upload("new2@wcu.ac.kr,새교수2,,NOPE\n")
         self.assertContains(res, "없는 과목코드")
         self.assertFalse(User.objects.filter(username="new2@wcu.ac.kr").exists())
+
+    def test_import_phone_normalized_and_validated(self):
+        res = self.upload("이메일,이름,휴대폰 번호,과목코드\n"
+                          "ph1@wcu.ac.kr,폰교수,01011112222,\n"
+                          "ph2@wcu.ac.kr,잘못된번호,02-123-4567,\n")
+        self.assertContains(res, "새 계정 1개, 오류 1건")
+        self.assertEqual(User.objects.get(username="ph1@wcu.ac.kr").phone, "010-1111-2222")
+        self.assertFalse(User.objects.filter(username="ph2@wcu.ac.kr").exists())
+        self.assertContains(res, "휴대폰 번호 형식")
+
+    def test_import_updates_phone_of_existing_account(self):
+        self.upload("kim@wcu.ac.kr,,010 3333 4444,C1\n")
+        self.prof.refresh_from_db()
+        self.assertEqual(self.prof.phone, "010-3333-4444")
+        log = AuditLog.objects.filter(target_table="accounts_user", target_id=self.prof.pk).latest("created_at")
+        self.assertEqual(log.after["phone"], "010-3333-4444")
+
+    def test_import_old_header_still_works(self):
+        res = self.upload("이메일,이름,연락처,과목코드\nold@wcu.ac.kr,옛양식,,\n")
+        self.assertContains(res, "새 계정 1개, 오류 0건")
 
     def test_template_download(self):
         res = self.client.get(reverse("manage:users_import_template"))

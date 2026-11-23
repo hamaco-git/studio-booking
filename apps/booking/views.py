@@ -4,7 +4,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Q
+from django.db.models import F, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -74,7 +74,7 @@ def events(request):
     out = []
 
     reservations = list(Reservation.objects.filter(
-        studio__in=studios, date__range=(start, end), status=Reservation.Status.CONFIRMED,
+        studio__in=studios, date__range=(start, end), status__in=Reservation.ACTIVE_STATUSES,
     ).select_related("studio", "professor", "course"))
     reserved_slot_ids = set()
     for r in reservations:
@@ -82,13 +82,18 @@ def events(request):
         mine = r.professor_id == user.pk
         if is_manager or mine:
             title = f"{r.studio.code} {r.professor.name} · {r.course.name}"
+            if is_manager and r.status == Reservation.Status.NO_SHOW:
+                title = f"[노쇼] {title}"
+            elif is_manager and r.status == Reservation.Status.COMPLETED:
+                title = f"[완료] {title}"
         else:
             title = f"{r.studio.code} 예약됨"
         out.append({
             "id": f"r{r.pk}", "title": title,
             "start": _hhmm(r.date, r.start_time), "end": _hhmm(r.date, r.end_time),
             "color": r.studio.color,
-            "extendedProps": {"kind": "reservation", "id": r.pk, "studio": r.studio_id, "mine": mine},
+            "extendedProps": {"kind": "reservation", "id": r.pk, "studio": r.studio_id, "mine": mine,
+                              "status": r.status if (is_manager or mine) else ""},
         })
 
     blackouts = list(Blackout.objects.filter(
@@ -213,6 +218,17 @@ def blackout_delete(request, pk):
 # ── 예약 관리 ──────────────────────────────────────────────
 
 
+STATUS_FILTERS = [
+    ("", "취소 제외 전체"),
+    ("CONFIRMED", "확정"),
+    ("pending", "처리 전 (촬영일 지남)"),
+    ("COMPLETED", "촬영 완료"),
+    ("NO_SHOW", "불참(노쇼)"),
+    ("CANCELLED", "취소"),
+    ("all", "취소 포함 전체"),
+]
+
+
 def _filtered_reservations(request):
     """예약 목록·엑셀 내려받기 공통 조건."""
     studios = viewable_studios(request.user)
@@ -223,13 +239,24 @@ def _filtered_reservations(request):
     sid = request.GET.get("studio")
     if sid and sid.isdigit():
         qs = qs.filter(studio_id=sid)
-    if request.GET.get("status") != "all":
-        qs = qs.filter(status=Reservation.Status.CONFIRMED)
+    status = request.GET.get("status", "")
+    if status == "all":
+        pass
+    elif status == "pending":
+        qs = qs.filter(status=Reservation.Status.CONFIRMED, date__lt=timezone.localdate())
+    elif status in Reservation.Status.values:
+        qs = qs.filter(status=status)
+    else:
+        status = ""
+        qs = qs.filter(status__in=Reservation.ACTIVE_STATUSES)
+    pid = request.GET.get("professor")
+    if pid and pid.isdigit():
+        qs = qs.filter(professor_id=pid)
     q = (request.GET.get("q") or "").strip()
     if q:
         qs = qs.filter(Q(professor__name__icontains=q) | Q(course__name__icontains=q))
     ctx = {"studios": studios, "start": start, "end": end, "sid": sid or "", "q": q,
-           "status": request.GET.get("status", "")}
+           "status": status, "professor": pid or "", "status_choices": STATUS_FILTERS}
     return qs.order_by("date", "start_time", "studio__code"), ctx
 
 
@@ -237,8 +264,10 @@ def _filtered_reservations(request):
 def reservations(request):
     qs, ctx = _filtered_reservations(request)
     editable_ids = set(editable_studios(request.user).values_list("pk", flat=True))
-    ctx["rows"] = [(r, r.studio_id in editable_ids) for r in qs]
+    today = timezone.localdate()
+    ctx["rows"] = [(r, r.studio_id in editable_ids, r.can_mark_attendance(today)) for r in qs]
     ctx["query"] = request.GET.urlencode()
+    ctx["next"] = request.get_full_path()
     return render(request, "booking/reservations.html", ctx)
 
 
@@ -253,19 +282,22 @@ def reservations_export(request):
     wb = Workbook()
     ws = wb.active
     ws.title = "예약"
-    headers = ["날짜", "요일", "시작", "종료", "스튜디오", "교수", "과목", "상태", "메모", "등록자", "등록일시"]
+    headers = ["날짜", "요일", "시작", "종료", "스튜디오", "교수", "과목", "상태", "메모", "등록자", "등록일시",
+               "취소 일시", "취소한 사람", "취소 사유"]
     ws.append(headers)
     for c in ws[1]:
         c.font = Font(bold=True)
     days = "월화수목금토일"
-    for r in qs.select_related("created_by"):
+    for r in qs.select_related("created_by", "cancelled_by"):
         ws.append([
             r.date, days[r.date.weekday()], r.start_time.strftime("%H:%M"), r.end_time.strftime("%H:%M"),
             r.studio.name, r.professor.name, r.course.name, r.get_status_display(), r.memo,
             r.created_by.name if r.created_by else "",
             timezone.localtime(r.created_at).strftime("%Y-%m-%d %H:%M"),
+            timezone.localtime(r.cancelled_at).strftime("%Y-%m-%d %H:%M") if r.cancelled_at else "",
+            r.cancelled_by.name if r.cancelled_by else "", r.cancel_reason,
         ])
-    for i, w in enumerate([12, 5, 7, 7, 12, 12, 24, 7, 30, 12, 17], 1):
+    for i, w in enumerate([12, 5, 7, 7, 12, 12, 24, 10, 30, 12, 17, 17, 12, 30], 1):
         ws.column_dimensions[get_column_letter(i)].width = w
     for row in ws.iter_rows(min_row=2, max_col=1):
         row[0].number_format = "yyyy-mm-dd"
@@ -279,10 +311,14 @@ def reservations_export(request):
 
 @staff_required
 def reservation_edit(request, pk):
-    r = get_object_or_404(Reservation.objects.select_related("studio", "professor", "course"), pk=pk)
+    r = get_object_or_404(Reservation.objects.select_related("studio", "professor", "course", "cancelled_by"), pk=pk)
     require_edit(request.user, r.studio)
     before = audit.snapshot(r)
-    form = ReservationEditForm(request.POST or None, instance=r, studios=editable_studios(request.user))
+    editable = r.status == Reservation.Status.CONFIRMED
+    form = ReservationEditForm(request.POST or None, instance=r, studios=editable_studios(request.user)) if editable else None
+    if request.method == "POST" and not editable:
+        messages.error(request, f"{r.get_status_display()} 상태의 예약은 시간을 바꿀 수 없습니다.")
+        return redirect("booking:reservation_edit", pk=r.pk)
     if request.method == "POST" and form.is_valid():
         r = form.save(commit=False)
         r.updated_by = request.user
@@ -295,28 +331,53 @@ def reservation_edit(request, pk):
             audit.log(request.user, AuditLog.Action.UPDATE, r, before=before, after=audit.snapshot(r))
             messages.success(request, "예약을 수정했습니다.")
             return redirect("booking:reservations")
-    history = AuditLog.objects.filter(target_table=r._meta.db_table, target_id=r.pk).select_related("user")[:20]
-    return render(request, "booking/reservation_edit.html", {"form": form, "r": r, "history": history})
+    display = audit._Display()
+    history = [
+        (h, audit.changes_text(h, display) if h.action != AuditLog.Action.CREATE else "")
+        for h in AuditLog.objects.filter(target_table=r._meta.db_table, target_id=r.pk).select_related("user")[:30]
+    ]
+    return render(request, "booking/reservation_edit.html", {
+        "form": form, "r": r, "history": history, "can_mark": r.can_mark_attendance(),
+    })
 
 
 @staff_required
 @require_POST
 def reservation_cancel(request, pk):
-    r = get_object_or_404(Reservation, pk=pk)
+    r = get_object_or_404(Reservation.objects.select_related("studio", "professor", "course"), pk=pk)
     require_edit(request.user, r.studio)
-    if r.status == Reservation.Status.CANCELLED:
-        messages.info(request, "이미 취소된 예약입니다.")
+    try:
+        services.cancel_reservation(request.user, r, reason=request.POST.get("reason", ""))
+    except ValidationError as e:
+        messages.info(request, " ".join(e.messages))
     else:
-        before = audit.snapshot(r)
-        r.status = Reservation.Status.CANCELLED
-        r.updated_by = request.user
-        r.save(update_fields=["status", "updated_by", "updated_at"])
-        audit.log(request.user, AuditLog.Action.CANCEL, r, before=before, after=audit.snapshot(r))
         messages.success(request, f"{r.date:%m/%d} {r.start_time:%H:%M} 예약을 취소했습니다.")
+    return _back(request, "booking:reservations")
+
+
+def _back(request, default):
     nxt = request.POST.get("next")
     if nxt and url_has_allowed_host_and_scheme(nxt, allowed_hosts={request.get_host()}):
         return redirect(nxt)
-    return redirect("booking:reservations")
+    return redirect(default)
+
+
+@staff_required
+@require_POST
+def reservation_status(request, pk):
+    """촬영 완료 / 불참(노쇼) 표시, 확정으로 되돌리기."""
+    r = get_object_or_404(Reservation.objects.select_related("studio", "professor", "course"), pk=pk)
+    require_edit(request.user, r.studio)
+    status = request.POST.get("status", "")
+    try:
+        changed = services.set_attendance(request.user, r, status)
+    except ValidationError as e:
+        messages.error(request, " ".join(e.messages))
+    else:
+        if changed:
+            messages.success(request, f"{r.date:%m/%d} {r.start_time:%H:%M} {r.professor.name} 예약을 "
+                                      f"'{r.get_status_display()}'(으)로 표시했습니다.")
+    return _back(request, "booking:reservations")
 
 
 @staff_required
@@ -341,3 +402,47 @@ def reservation_new(request):
                 messages.success(request, f"{pair.professor.name} 교수 예약을 등록했습니다.")
                 return redirect("booking:calendar")
     return render(request, "booking/reservation_new.html", {"slot": slot, "pairs": pairs})
+
+
+# ── 노쇼·취소 기록 ─────────────────────────────────────────
+
+
+@staff_required
+def records(request):
+    """기간별 교수 출결(촬영 완료·노쇼)·취소 집계와 노쇼·취소 상세 기록."""
+    from django.db.models import Count
+
+    from apps.studios.models import Semester
+
+    today = timezone.localdate()
+    sem = Semester.objects.filter(is_current=True).first()
+    default_start = sem.start_date if sem else today - timedelta(days=90)
+    default_end = min(sem.end_date, today) if sem and sem.end_date >= sem.start_date else today
+    start = parse_date(request.GET.get("start") or "") or default_start
+    end = parse_date(request.GET.get("end") or "") or max(default_end, start)
+    studios = viewable_studios(request.user)
+    qs = Reservation.objects.filter(studio__in=studios, date__range=(start, end))
+    sid = request.GET.get("studio")
+    if sid and sid.isdigit():
+        qs = qs.filter(studio_id=sid)
+
+    S = Reservation.Status
+    summary = list(
+        qs.values("professor_id", "professor__name").annotate(
+            total=Count("id"),
+            completed=Count("id", filter=Q(status=S.COMPLETED)),
+            no_show=Count("id", filter=Q(status=S.NO_SHOW)),
+            cancelled=Count("id", filter=Q(status=S.CANCELLED)),
+            cancelled_by_staff=Count("id", filter=Q(status=S.CANCELLED) & ~Q(cancelled_by=F("professor"))),
+            pending=Count("id", filter=Q(status=S.CONFIRMED, date__lt=today)),
+        ).order_by("-no_show", "-cancelled", "professor__name")
+    )
+    totals = {k: sum(row[k] for row in summary)
+              for k in ("total", "completed", "no_show", "cancelled", "pending")}
+    details = qs.filter(status__in=[S.NO_SHOW, S.CANCELLED]).select_related(
+        "studio", "professor", "course", "cancelled_by",
+    ).order_by("-date", "-start_time")[:300]
+    return render(request, "booking/records.html", {
+        "studios": studios, "sid": sid or "", "start": start, "end": end, "semester": sem,
+        "summary": summary, "totals": totals, "details": details,
+    })

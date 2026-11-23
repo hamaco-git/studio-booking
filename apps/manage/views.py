@@ -1,4 +1,4 @@
-"""담당자·슈퍼관리자 관리 화면: 학기, 과목·교수 배정, 계정, CSV 일괄 등록, 변경 이력."""
+"""담당자·슈퍼관리자 관리 화면: 학기, 과목·교수 배정, 계정, CSV 일괄 등록, 작업 이력."""
 
 import csv
 
@@ -7,7 +7,8 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Value
+from django.db.models.functions import Replace
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -15,6 +16,7 @@ from django.utils.dateparse import parse_date
 from django.views.decorators.http import require_POST
 
 from apps.accounts.models import User
+from apps.accounts.phone import digits as phone_digits
 from apps.booking import audit
 from apps.booking.models import AuditLog
 from apps.booking.permissions import editable_studios, staff_required
@@ -147,12 +149,21 @@ def users(request):
         qs = qs.filter(role=role)
     if request.GET.get("inactive") != "1":
         qs = qs.filter(is_active=True)
+    if request.GET.get("nophone") == "1":
+        qs = qs.filter(phone="")
     q = (request.GET.get("q") or "").strip()
     if q:
-        qs = qs.filter(Q(name__icontains=q) | Q(username__icontains=q))
+        cond = Q(name__icontains=q) | Q(username__icontains=q)
+        d = phone_digits(q)
+        if len(d) >= 4:
+            # 휴대폰 번호는 하이픈 유무와 관계없이 찾는다 (예: 12345678 → 010-1234-5678)
+            qs = qs.annotate(phone_d=Replace("phone", Value("-"), Value("")))
+            cond |= Q(phone_d__contains=d)
+        qs = qs.filter(cond)
     page = Paginator(qs.order_by("role", "name"), 50).get_page(request.GET.get("page"))
     return render(request, "manage/users.html", {
         "page": page, "role": role, "q": q, "inactive": request.GET.get("inactive", ""),
+        "nophone": request.GET.get("nophone", ""),
         "roles": User.Role.choices if request.user.is_super_admin else [],
     })
 
@@ -243,7 +254,7 @@ def users_import_result(request):
     ])
 
 
-# ── 변경 이력 ─────────────────────────────────────────────
+# ── 작업 이력 ─────────────────────────────────────────────
 
 TABLE_LABELS = {
     "booking_reservation": "예약",
@@ -255,20 +266,16 @@ TABLE_LABELS = {
 }
 
 
-def _changes(log):
-    if log.before and log.after:
-        keys = [k for k in log.after if k in log.before and log.before.get(k) != log.after.get(k)]
-        return ", ".join(f"{k}: {log.before.get(k)} → {log.after.get(k)}" for k in keys if k not in ("updated_by",))
-    data = log.after or log.before or {}
-    return ", ".join(f"{k}: {v}" for k, v in data.items() if k not in ("id", "created_by", "updated_by"))[:300]
-
-
 @staff_required
 def logs(request):
+    """누가 언제 무엇을 생성·수정·취소·상태 변경했는지 조회 (슈퍼관리자·담당자)."""
     qs = AuditLog.objects.select_related("user")
     table = request.GET.get("table", "")
     if table in TABLE_LABELS:
         qs = qs.filter(target_table=table)
+    action = request.GET.get("action", "")
+    if action in AuditLog.Action.values:
+        qs = qs.filter(action=action)
     start, end = parse_date(request.GET.get("start") or ""), parse_date(request.GET.get("end") or "")
     if start:
         qs = qs.filter(created_at__date__gte=start)
@@ -277,11 +284,19 @@ def logs(request):
     q = (request.GET.get("q") or "").strip()
     if q:
         qs = qs.filter(user__name__icontains=q)
+    target = (request.GET.get("target") or "").strip()
+    if target:
+        qs = qs.filter(summary__icontains=target)
     page = Paginator(qs, 50).get_page(request.GET.get("page"))
-    rows = [(log, TABLE_LABELS.get(log.target_table, log.target_table), _changes(log)) for log in page]
+    display = audit._Display()
+    rows = [
+        (log, TABLE_LABELS.get(log.target_table, log.target_table), audit.changes_text(log, display))
+        for log in page
+    ]
     params = request.GET.copy()
     params.pop("page", None)
     return render(request, "manage/logs.html", {
         "page": page, "rows": rows, "tables": TABLE_LABELS.items(), "table": table,
+        "actions": AuditLog.Action.choices, "action": action, "target": target,
         "start": start, "end": end, "q": q, "query": params.urlencode(),
     })

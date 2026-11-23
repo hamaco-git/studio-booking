@@ -7,10 +7,14 @@
   <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32.png' %}">
   <link rel="apple-touch-icon" href="{% static 'img/apple-touch-icon.png' %}">
   <link rel="stylesheet" href="{% static 'vendor/bootstrap.min.css' %}">
+  <style>
+    /* 메뉴가 많아 폭이 좁으면 글자가 세로로 쪼개지지 않고 다음 줄로 넘어가게 */
+    .navbar .nav-link, .navbar .btn, .navbar .small { white-space: nowrap; }
+  </style>
 </head>
 <body class="bg-light">
 <nav class="navbar navbar-expand bg-white border-bottom mb-4">
-  <div class="container">
+  <div class="container flex-wrap row-gap-1">
     <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'home' %}">
       <img src="{% static 'img/logo_horizontal.png' %}" alt="세계사이버대학" height="30" style="width:auto">
       <span class="d-none d-md-inline border-start ps-2 fs-6 text-secondary">스튜디오 예약</span>
@@ -18,17 +22,18 @@
     {% if user.is_authenticated %}
     {% if user.is_studio_staff or user.is_super_admin %}
     {% with u=request.resolver_match.url_name %}
-    <ul class="navbar-nav me-auto">
+    <ul class="navbar-nav flex-wrap me-auto">
       <li class="nav-item"><a class="nav-link{% if u == 'calendar' %} active{% endif %}" href="{% url 'booking:calendar' %}">현황 달력</a></li>
       <li class="nav-item"><a class="nav-link{% if u == 'week_slots' %} active{% endif %}" href="{% url 'booking:week_slots' %}">주간 슬롯 설정</a></li>
       <li class="nav-item"><a class="nav-link{% if u == 'blackouts' %} active{% endif %}" href="{% url 'booking:blackouts' %}">촬영 불가일</a></li>
       <li class="nav-item"><a class="nav-link{% if u == 'reservations' or u == 'reservation_edit' %} active{% endif %}" href="{% url 'booking:reservations' %}">예약 목록</a></li>
+      <li class="nav-item"><a class="nav-link{% if u == 'records' %} active{% endif %}" href="{% url 'booking:records' %}">노쇼·취소</a></li>
       <li class="nav-item"><a class="nav-link{% if request.resolver_match.namespace == 'manage' %} active{% endif %}" href="{% url 'manage:courses' %}">관리</a></li>
     </ul>
     {% endwith %}
     {% elif user.is_professor %}
     {% with u=request.resolver_match.url_name %}
-    <ul class="navbar-nav me-auto">
+    <ul class="navbar-nav flex-wrap me-auto">
       <li class="nav-item"><a class="nav-link{% if u == 'book' %} active{% endif %}" href="{% url 'booking:book' %}">촬영 예약</a></li>
       <li class="nav-item"><a class="nav-link{% if u == 'my_reservations' %} active{% endif %}" href="{% url 'booking:my_reservations' %}">내 예약</a></li>
     </ul>

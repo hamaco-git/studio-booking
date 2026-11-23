@@ -6,8 +6,8 @@
     <h2 class="h6 mb-3">CSV 파일로 교수 계정 만들기</h2>
     <ol class="small">
       <li><a href="{% url 'manage:users_import_template' %}">양식(CSV) 내려받기</a> 후 엑셀에서 작성합니다.</li>
-      <li>열 순서: {{ headers|join:", " }}. 과목코드는 여러 개면 세미콜론(;)으로 구분하며 비워도 됩니다.</li>
-      <li>"CSV" 형식으로 저장해 올립니다. 이미 있는 이메일은 새로 만들지 않고 과목 배정만 합니다.</li>
+      <li>열 순서: {{ headers|join:", " }}. 휴대폰 번호는 하이픈(-) 없이 써도 되고, 과목코드는 여러 개면 세미콜론(;)으로 구분합니다. 둘 다 비워도 됩니다.</li>
+      <li>"CSV" 형식으로 저장해 올립니다. 이미 있는 이메일은 새로 만들지 않고 과목 배정만 하며, 휴대폰 번호 칸이 채워져 있으면 그 번호로 바꿉니다.</li>
     </ol>
     <form method="post" enctype="multipart/form-data">{% csrf_token %}
       <div class="mb-3"><label class="form-label" for="{{ form.file.id_for_label }}">CSV 파일</label>{{ form.file }}

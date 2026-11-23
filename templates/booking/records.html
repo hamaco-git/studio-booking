@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}노쇼·취소 기록 · 스튜디오 예약{% endblock %}
+{% block content %}
+<div class="d-flex align-items-center mb-3">
+  <h1 class="h4 m-0 me-auto">노쇼·취소 기록</h1>
+  {% if totals.pending %}<a class="btn btn-warning" href="{% url 'booking:reservations' %}?status=pending&start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}{% if sid %}&studio={{ sid }}{% endif %}">처리 전 {{ totals.pending }}건 표시하기</a>{% endif %}
+</div>
+<form method="get" class="row g-2 align-items-end mb-3">
+  <div class="col-auto"><label class="form-label small" for="f-start">시작일</label><input id="f-start" type="date" name="start" value="{{ start|date:'Y-m-d' }}" class="form-control"></div>
+  <div class="col-auto"><label class="form-label small" for="f-end">종료일</label><input id="f-end" type="date" name="end" value="{{ end|date:'Y-m-d' }}" class="form-control"></div>
+  <div class="col-auto"><label class="form-label small" for="f-studio">스튜디오</label>
+    <select id="f-studio" name="studio" class="form-select"><option value="">전체</option>
+      {% for s in studios %}<option value="{{ s.pk }}" {% if sid == s.pk|stringformat:'s' %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+    </select></div>
+  <div class="col-auto"><button class="btn btn-outline-primary">조회</button></div>
+  {% if semester %}<div class="col-auto small text-secondary mb-2">기본 기간: {{ semester.name }} 학기 시작일부터 오늘까지</div>{% endif %}
+</form>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md"><div class="card shadow-sm"><div class="card-body py-2"><div class="small text-secondary">전체 예약</div><div class="h4 m-0">{{ totals.total }}</div></div></div></div>
+  <div class="col-6 col-md"><div class="card shadow-sm"><div class="card-body py-2"><div class="small text-secondary">촬영 완료</div><div class="h4 m-0 text-success">{{ totals.completed }}</div></div></div></div>
+  <div class="col-6 col-md"><div class="card shadow-sm"><div class="card-body py-2"><div class="small text-secondary">불참(노쇼)</div><div class="h4 m-0 text-danger">{{ totals.no_show }}</div></div></div></div>
+  <div class="col-6 col-md"><div class="card shadow-sm"><div class="card-body py-2"><div class="small text-secondary">취소</div><div class="h4 m-0">{{ totals.cancelled }}</div></div></div></div>
+  <div class="col-12 col-md"><div class="card shadow-sm"><div class="card-body py-2"><div class="small text-secondary">처리 전 (촬영일 지남)</div><div class="h4 m-0 text-warning-emphasis">{{ totals.pending }}</div></div></div></div>
+</div>
+
+<h2 class="h6">교수별 집계</h2>
+<div class="card shadow-sm mb-4"><div class="table-responsive">
+  <table class="table table-sm align-middle mb-0">
+    <thead class="table-light"><tr><th>교수</th><th class="text-end">전체</th><th class="text-end">완료</th><th class="text-end">노쇼</th><th class="text-end">취소</th><th class="text-end">담당자 취소</th><th class="text-end">처리 전</th><th></th></tr></thead>
+    <tbody>
+    {% for p in summary %}
+      <tr>
+        <td>{{ p.professor__name }}</td>
+        <td class="text-end">{{ p.total }}</td>
+        <td class="text-end">{{ p.completed }}</td>
+        <td class="text-end{% if p.no_show %} text-danger fw-bold{% endif %}">{{ p.no_show }}</td>
+        <td class="text-end">{{ p.cancelled }}</td>
+        <td class="text-end">{{ p.cancelled_by_staff }}</td>
+        <td class="text-end">{{ p.pending|default:"" }}</td>
+        <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{% url 'booking:reservations' %}?status=all&professor={{ p.professor_id }}&start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}{% if sid %}&studio={{ sid }}{% endif %}">예약 보기</a></td>
+      </tr>
+    {% empty %}<tr><td colspan="8" class="text-center text-secondary py-4">이 기간에 예약이 없습니다.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div></div>
+
+<h2 class="h6">노쇼·취소 상세 <span class="text-secondary small">(최근 300건까지)</span></h2>
+<div class="card shadow-sm"><div class="table-responsive">
+  <table class="table table-sm align-middle mb-0">
+    <thead class="table-light"><tr><th>촬영일</th><th>시간</th><th>스튜디오</th><th>교수</th><th>과목</th><th>구분</th><th>취소 일시</th><th>취소한 사람</th><th>사유·메모</th></tr></thead>
+    <tbody>
+    {% for r in details %}
+      <tr>
+        <td class="text-nowrap"><a href="{% url 'booking:reservation_edit' r.pk %}">{{ r.date|date:"Y-m-d (D)" }}</a></td>
+        <td class="text-nowrap">{{ r.start_time|time:"H:i" }}~{{ r.end_time|time:"H:i" }}</td>
+        <td>{{ r.studio.code }}</td>
+        <td>{{ r.professor.name }}</td>
+        <td>{{ r.course.name }}</td>
+        <td>{% if r.status == 'NO_SHOW' %}<span class="badge text-bg-danger">노쇼</span>{% else %}<span class="badge text-bg-secondary">취소</span>{% endif %}</td>
+        <td class="small text-nowrap">{{ r.cancelled_at|date:"Y-m-d H:i"|default:"" }}</td>
+        <td class="small">{% if r.cancelled_by %}{% if r.cancelled_by_id == r.professor_id %}교수 본인{% else %}{{ r.cancelled_by.name }}{% endif %}{% endif %}</td>
+        <td class="small text-break">{{ r.cancel_reason }}{% if r.cancel_reason and r.memo %} · {% endif %}{{ r.memo }}</td>
+      </tr>
+    {% empty %}<tr><td colspan="9" class="text-center text-secondary py-4">노쇼·취소 기록이 없습니다.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

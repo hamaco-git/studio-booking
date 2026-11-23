@@ -52,7 +52,7 @@ def build_week_grid(studio, monday):
     templates = list(SlotTemplate.objects.filter(is_active=True))
     slots = list(OpenSlot.objects.filter(studio=studio, date__range=(days[0], days[-1])))
     reserved_ids = set(
-        Reservation.objects.filter(slot__in=slots, status=Reservation.Status.CONFIRMED).values_list("slot_id", flat=True)
+        Reservation.objects.filter(slot__in=slots, status__in=Reservation.ACTIVE_STATUSES).values_list("slot_id", flat=True)
     )
     blackouts = list(
         Blackout.objects.filter(Q(studio=studio) | Q(studio__isnull=True), date__range=(days[0], days[-1]))
@@ -213,9 +213,42 @@ def professor_can_cancel(reservation):
     )
 
 
-def cancel_reservation(actor, reservation):
+def cancel_reservation(actor, reservation, reason=""):
+    """예약을 취소 상태로 바꾼다 (삭제하지 않음). 확정 상태만 취소할 수 있다."""
+    from django.core.exceptions import ValidationError
+    from django.utils import timezone
+
+    if reservation.status != Reservation.Status.CONFIRMED:
+        raise ValidationError(f"{reservation.get_status_display()} 상태의 예약은 취소할 수 없습니다.")
     before = audit.snapshot(reservation)
     reservation.status = Reservation.Status.CANCELLED
+    reservation.cancelled_at = timezone.now()
+    reservation.cancelled_by = actor
+    reservation.cancel_reason = (reason or "").strip()[:200]
+    reservation.updated_by = actor
+    reservation.save(update_fields=["status", "cancelled_at", "cancelled_by", "cancel_reason", "updated_by", "updated_at"])
+    audit.log(actor, AuditLog.Action.CANCEL, reservation, before=before, after=audit.snapshot(reservation))
+
+
+def set_attendance(actor, reservation, status):
+    """촬영 완료 / 불참(노쇼) 표시, 또는 확정으로 되돌리기.
+
+    촬영일 당일부터 표시할 수 있고, 취소된 예약은 바꿀 수 없다.
+    """
+    from django.core.exceptions import ValidationError
+
+    allowed = (Reservation.Status.CONFIRMED, *Reservation.ATTENDANCE_STATUSES)
+    if status not in allowed:
+        raise ValidationError("바꿀 수 없는 상태입니다.")
+    if not reservation.is_active:
+        raise ValidationError("취소된 예약은 상태를 바꿀 수 없습니다.")
+    if status != Reservation.Status.CONFIRMED and not reservation.can_mark_attendance():
+        raise ValidationError("촬영 완료·불참은 촬영일 당일부터 표시할 수 있습니다.")
+    if reservation.status == status:
+        return False
+    before = audit.snapshot(reservation)
+    reservation.status = status
     reservation.updated_by = actor
     reservation.save(update_fields=["status", "updated_by", "updated_at"])
-    audit.log(actor, AuditLog.Action.CANCEL, reservation, before=before, after=audit.snapshot(reservation))
+    audit.log(actor, AuditLog.Action.STATUS, reservation, before=before, after=audit.snapshot(reservation))
+    return True

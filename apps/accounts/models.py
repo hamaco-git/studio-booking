@@ -1,6 +1,8 @@
 from django.contrib.auth.models import AbstractUser, UserManager as BaseUserManager
 from django.db import models
 
+from .phone import normalize_phone, validate_phone
+
 
 class UserManager(BaseUserManager):
     def create_superuser(self, username, email=None, password=None, **extra_fields):
@@ -23,7 +25,10 @@ class User(AbstractUser):
         PROFESSOR = "PROFESSOR", "교수"
 
     name = models.CharField("이름", max_length=50)
-    phone = models.CharField("연락처", max_length=30, blank=True)
+    phone = models.CharField(
+        "휴대폰 번호", max_length=20, blank=True, validators=[validate_phone],
+        help_text="예: 010-1234-5678. 예약 알림 문자 발송에 사용할 예정입니다.",
+    )
     role = models.CharField("역할", max_length=10, choices=Role.choices, default=Role.PROFESSOR)
     must_change_password = models.BooleanField("비밀번호 변경 필요", default=True)
 
@@ -40,6 +45,7 @@ class User(AbstractUser):
         return f"{self.name} ({self.get_role_display()})"
 
     def save(self, *args, **kwargs):
+        self.phone = normalize_phone(self.phone)
         # 슈퍼관리자는 Django 관리자 화면 권한도 함께 가진다.
         if self.role == self.Role.SUPER:
             self.is_staff = True
