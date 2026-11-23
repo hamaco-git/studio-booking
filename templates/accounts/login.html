@@ -6,8 +6,8 @@
   <div class="col-md-5 col-lg-4">
     <div class="card shadow-sm"><div class="card-body p-4">
       <div class="text-center mb-4">
-        <img src="{% static 'img/logo_emblem.png' %}" alt="" height="64" style="width:auto" class="mb-2">
-        <h1 class="h4 mb-0">로그인</h1>
+        <img src="{% static 'img/logo_emblem.png' %}" alt="세계사이버대학" height="120" style="width:auto" class="mb-3">
+        <h1 class="h5 mb-0 fw-semibold">스튜디오 예약 관리 서비스</h1>
       </div>
       {% if form.errors %}<div class="alert alert-danger">아이디 또는 비밀번호가 올바르지 않습니다.</div>{% endif %}
       <form method="post">{% csrf_token %}
