@@ -26,13 +26,17 @@ sudo -u postgres psql -c "CREATE DATABASE studio_booking OWNER studio;"
 sudo -u studio git clone https://github.com/hamaco-git/studio-booking.git /srv/studio-booking
 cd /srv/studio-booking
 sudo -u studio cp .env.example .env
-sudo -u studio nano .env   # DEBUG=False, SECRET_KEY, DATABASE_URL, ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS, SECURE_COOKIES=True
+sudo -u studio nano .env   # DEBUG=False, SECRET_KEY, DATABASE_URL, ALLOWED_HOSTS=<도메인>, SECURE_COOKIES=True
 sudo -u studio uv sync --frozen
 sudo -u studio uv run python manage.py migrate
 sudo -u studio uv run python manage.py seed_studios
 sudo -u studio uv run python manage.py collectstatic --noinput
 sudo -u studio uv run python manage.py createsuperuser
 ```
+
+`.env`의 `ALLOWED_HOSTS`에는 사용자가 브라우저에 입력할 도메인을 적습니다(여러 개면 쉼표로 구분).
+`CSRF_TRUSTED_ORIGINS`는 비워 두면 `https://<도메인>`이 자동으로 들어갑니다. 도메인을 바꾸면
+`deploy/nginx-studio-booking.conf`의 `server_name`도 같이 바꾸고 `sudo systemctl restart studio-booking`으로 다시 켭니다.
 
 ## 4. Gunicorn(systemd)과 Nginx
 

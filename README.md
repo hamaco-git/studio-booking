@@ -81,6 +81,19 @@ uv run python manage.py runserver
 - 사용자 화면: http://127.0.0.1:8000/
 - 관리자 화면: http://127.0.0.1:8000/admin/ (슈퍼관리자로 로그인)
 
+같은 내부망의 다른 PC·휴대폰에서 접속해 보려면 `0.0.0.0`으로 띄웁니다.
+
+```bash
+uv run python manage.py runserver 0.0.0.0:8000
+```
+
+`DEBUG=True`(또는 `.env`에 `LAN_ACCESS=True`)이면 이 Mac의 내부망 IP와 호스트명(`이름.local`)이
+자동으로 허용되므로 `http://<Mac의 IP>:8000/`으로 접속하면 됩니다. Mac의 IP는
+`ipconfig getifaddr en0`으로 확인합니다. `DEBUG=False`로 띄울 때는 정적 파일을 위해 `--insecure`를 붙입니다.
+
+`400 Bad Request`가 나오면 허용되지 않은 주소로 접속한 것입니다. 서버 콘솔에
+`Invalid HTTP_HOST header: '주소'`가 찍히므로 그 주소를 `.env`의 `ALLOWED_HOSTS`에 쉼표로 이어 적고 서버를 다시 켭니다.
+
 관리자 화면에서 학기, 과목(지정 스튜디오·담당 교수), 담당자·교수 계정, 예약 가능 슬롯을 등록해 볼 수 있습니다.
 새로 만든 담당자·교수 계정은 처음 로그인할 때 비밀번호를 바꾸도록 안내됩니다.
 
