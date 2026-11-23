@@ -3,9 +3,9 @@
     uv run python manage.py load_accounts 계정목록.csv            # 확인만 (저장 안 함)
     uv run python manage.py load_accounts 계정목록.csv --apply    # 실제로 저장
 
-CSV 열 (첫 줄은 제목): 역할, 이메일, 이름, 연락처, 담당스튜디오, 초기비밀번호
+CSV 열 (첫 줄은 제목): 역할, 아이디, 이름, 연락처, 담당스튜디오, 초기비밀번호
 - 역할: 슈퍼관리자 / 담당자 / 교수 (SUPER / STAFF / PROFESSOR 도 가능)
-- 이메일: 로그인 ID. 비어 있는 행은 건너뛴다 (아직 정해지지 않은 자리)
+- 아이디: 로그인 ID. 학교 이메일 또는 studio1 같은 영문·숫자 아이디. 비어 있는 행은 건너뛴다
 - 담당스튜디오: 담당자만. studio1 처럼 코드, 여러 개면 세미콜론(;)
 - 초기비밀번호: 비우면 강한 무작위 값을 만들어 결과에 보여 준다
 
@@ -63,16 +63,19 @@ class Command(BaseCommand):
             role_txt, email, name, phone, studio_txt, pw = (cols + [""] * 6)[:6]
             email = email.lower()
             if not email:
-                self.stdout.write(f"{line}행: 건너뜀 (이메일 비어 있음)")
+                self.stdout.write(f"{line}행: 건너뜀 (아이디 비어 있음)")
                 continue
             role = ROLES.get(role_txt) or ROLES.get(role_txt.upper())
             try:
-                validate_email(email)
+                if "@" in email:
+                    validate_email(email)
+                else:
+                    User.username_validator(email)
             except ValidationError:
-                errors.append(f"{line}행: 이메일 형식 오류 ({email})")
+                errors.append(f"{line}행: 아이디/이메일 형식 오류 ({email})")
                 continue
             if email in seen:
-                errors.append(f"{line}행: 이메일 중복 ({email})")
+                errors.append(f"{line}행: 아이디 중복 ({email})")
                 continue
             seen.add(email)
             if not role:
@@ -114,7 +117,7 @@ class Command(BaseCommand):
                         user.save(update_fields=["password", "must_change_password"])
                         status = "기존 계정, 비밀번호 재설정"
                 else:
-                    user = User(username=p["email"], email=p["email"], name=p["name"], phone=p["phone"],
+                    user = User(username=p["email"], email=p["email"] if "@" in p["email"] else "", name=p["name"], phone=p["phone"],
                                 role=p["role"], must_change_password=True)
                     user.set_password(p["password"])
                     user.save()

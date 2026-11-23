@@ -54,3 +54,10 @@ class LoadAccountsTest(TestCase):
                      "--apply", "--skip-password-check")
         u = User.objects.get(username="p3@wcu.ac.kr")
         self.assertTrue(u.check_password("test1234") and u.must_change_password)
+
+    def test_plain_login_id_allowed(self):
+        self.run_cmd("역할,아이디,이름,연락처,담당스튜디오,초기비밀번호\n담당자,studio1,담당자1,,studio1,test1234\n",
+                     "--apply", "--skip-password-check")
+        u = User.objects.get(username="studio1")
+        self.assertEqual(u.email, "")
+        self.assertTrue(self.client.login(username="studio1", password="test1234"))
