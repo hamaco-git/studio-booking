@@ -9,6 +9,8 @@ from pathlib import Path
 
 import environ
 
+from config.netutil import https_origins, local_network_hosts
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 env = environ.Env(
@@ -21,8 +23,21 @@ environ.Env.read_env(BASE_DIR / ".env")
 
 SECRET_KEY = env("SECRET_KEY")
 DEBUG = env("DEBUG")
+
+# 접속 허용 주소(도메인·IP). 운영 서버는 .env에 도메인을 적는다.
+#   ALLOWED_HOSTS=studio.example.ac.kr
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
-CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS")
+
+# Mac에서 runserver 0.0.0.0:8000 으로 띄워 같은 내부망의 다른 PC에서 접속할 때,
+# 이 컴퓨터의 내부망(사설) IP와 호스트명(.local)을 자동으로 허용한다.
+# IP가 바뀌어도 서버를 다시 켜면 새 IP가 반영된다. 기본값은 DEBUG와 같음.
+LAN_ACCESS = env.bool("LAN_ACCESS", default=DEBUG)
+if LAN_ACCESS:
+    ALLOWED_HOSTS = [*ALLOWED_HOSTS, *local_network_hosts()]
+
+# 로그인 등 POST를 허용할 출처. 비워 두면 ALLOWED_HOSTS의 도메인마다
+# https://도메인 을 자동으로 넣는다(IP·localhost 제외). 필요할 때만 직접 적는다.
+CSRF_TRUSTED_ORIGINS = env("CSRF_TRUSTED_ORIGINS") or https_origins(ALLOWED_HOSTS)
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -109,3 +124,18 @@ MESSAGE_TAGS = {message_constants.ERROR: "danger"}
 
 # 교수 본인 예약 취소 마감: 촬영일 N일 전까지 (그 이후는 담당자에게 요청)
 PROFESSOR_CANCEL_DAYS_BEFORE = env.int("PROFESSOR_CANCEL_DAYS_BEFORE", default=2)
+
+# 허용되지 않은 주소로 접속하면(400 Bad Request) DEBUG와 관계없이 콘솔에
+# 어떤 주소가 막혔는지 표시한다. → 그 주소를 .env의 ALLOWED_HOSTS에 추가
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "loggers": {
+        "django.security.DisallowedHost": {
+            "handlers": ["console"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+    },
+}
