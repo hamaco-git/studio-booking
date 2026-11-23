@@ -4,12 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}스튜디오 예약{% endblock %}</title>
+  <link rel="icon" type="image/png" sizes="32x32" href="{% static 'img/favicon-32.png' %}">
+  <link rel="apple-touch-icon" href="{% static 'img/apple-touch-icon.png' %}">
   <link rel="stylesheet" href="{% static 'vendor/bootstrap.min.css' %}">
 </head>
 <body class="bg-light">
 <nav class="navbar navbar-expand bg-white border-bottom mb-4">
   <div class="container">
-    <a class="navbar-brand" href="{% url 'home' %}">스튜디오 예약</a>
+    <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'home' %}">
+      <img src="{% static 'img/logo_horizontal.png' %}" alt="세계사이버대학" height="30" style="width:auto">
+      <span class="d-none d-md-inline border-start ps-2 fs-6 text-secondary">스튜디오 예약</span>
+    </a>
     {% if user.is_authenticated %}
     {% if user.is_studio_staff or user.is_super_admin %}
     {% with u=request.resolver_match.url_name %}
