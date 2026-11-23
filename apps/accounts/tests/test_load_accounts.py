@@ -48,3 +48,9 @@ class LoadAccountsTest(TestCase):
         with self.assertRaises(CommandError):
             self.run_cmd("역할,이메일,이름,연락처,담당스튜디오,초기비밀번호\n교수,p2@wcu.ac.kr,박교수,,,1234\n", "--apply")
         self.assertFalse(User.objects.exists())
+
+    def test_skip_password_check_allows_common_initial_password(self):
+        self.run_cmd("역할,이메일,이름,연락처,담당스튜디오,초기비밀번호\n교수,p3@wcu.ac.kr,최교수,,,test1234\n",
+                     "--apply", "--skip-password-check")
+        u = User.objects.get(username="p3@wcu.ac.kr")
+        self.assertTrue(u.check_password("test1234") and u.must_change_password)

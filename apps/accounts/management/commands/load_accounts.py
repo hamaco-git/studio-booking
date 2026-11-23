@@ -11,6 +11,7 @@ CSV 열 (첫 줄은 제목): 역할, 이메일, 이름, 연락처, 담당스튜�
 
 만든 계정은 모두 첫 로그인 때 비밀번호를 바꾸도록 설정된다.
 이미 있는 계정은 바꾸지 않는다 (--reset-password 를 주면 비밀번호만 CSV 값으로 다시 설정).
+공통 초기 비밀번호(예: test1234)처럼 규칙에 걸리는 값을 쓰려면 --skip-password-check 를 붙인다.
 이 CSV에는 비밀번호가 들어 있으므로 저장소에 올리지 말고, 사용 후 서버에서 지운다.
 """
 
@@ -50,8 +51,10 @@ class Command(BaseCommand):
         parser.add_argument("csv_path")
         parser.add_argument("--apply", action="store_true", help="실제로 저장 (없으면 확인만)")
         parser.add_argument("--reset-password", action="store_true", help="이미 있는 계정의 비밀번호를 CSV 값으로 다시 설정")
+        parser.add_argument("--skip-password-check", action="store_true",
+                            help="초기 비밀번호의 규칙 검사(흔한 비밀번호 등)를 건너뜀. 첫 로그인 때 변경이 강제되므로 공통 초기 비밀번호용")
 
-    def handle(self, csv_path, apply, reset_password, **options):
+    def handle(self, csv_path, apply, reset_password, skip_password_check=False, **options):
         rows = self._read(csv_path)
         studios = {s.code: s for s in Studio.objects.all()}
         errors, plans = [], []
@@ -89,7 +92,8 @@ class Command(BaseCommand):
             generated = not pw
             pw = pw or strong_password(4 if role == User.Role.SUPER else 3)
             try:
-                validate_password(pw, User(username=email, email=email, name=name))
+                if not skip_password_check:
+                    validate_password(pw, User(username=email, email=email, name=name))
             except ValidationError as e:
                 errors.append(f"{line}행: 비밀번호 규칙 위반 - {' '.join(e.messages)}")
                 continue
