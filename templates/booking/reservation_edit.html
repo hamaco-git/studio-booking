@@ -1,11 +1,36 @@
 {% extends "base.html" %}
-{% block title %}예약 수정 · 스튜디오 예약{% endblock %}
+{% block title %}예약 상세 · 스튜디오 예약{% endblock %}
 {% block content %}
-<h1 class="h4 mb-3">예약 수정</h1>
+<h1 class="h4 mb-3">예약 {% if form %}수정{% else %}상세{% endif %}</h1>
 <div class="row g-4">
   <div class="col-lg-6">
+    <div class="card shadow-sm mb-3"><div class="card-body">
+      <p class="mb-1"><strong>{{ r.professor.name }}</strong> 교수 · {{ r.course.name }}</p>
+      <p class="small text-secondary mb-2">{% if r.professor.phone %}휴대폰 {{ r.professor.phone }} · {% endif %}{{ r.professor.username }}</p>
+      <p class="mb-0">상태: {% include "booking/_status_badge.html" %}</p>
+      {% if r.status == 'CANCELLED' %}
+      <p class="small text-secondary mt-2 mb-0">{{ r.cancelled_at|date:"Y-m-d H:i" }} · {% if r.cancelled_by_id == r.professor_id %}교수 본인{% else %}{{ r.cancelled_by.name|default:"-" }}{% endif %} 취소{% if r.cancel_reason %} · 사유: {{ r.cancel_reason }}{% endif %}</p>
+      {% endif %}
+    </div></div>
+
+    {% if r.status != 'CANCELLED' %}
+    <div class="card shadow-sm mb-3"><div class="card-body">
+      <h2 class="h6">촬영 결과</h2>
+      {% if can_mark %}
+      <form method="post" action="{% url 'booking:reservation_status' r.pk %}" class="d-flex flex-wrap gap-2">{% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        {% if r.status != 'COMPLETED' %}<button name="status" value="COMPLETED" class="btn btn-outline-success">촬영 완료</button>{% endif %}
+        {% if r.status != 'NO_SHOW' %}<button name="status" value="NO_SHOW" class="btn btn-outline-danger" onclick="return confirm('불참(노쇼)으로 표시할까요?');">불참(노쇼)</button>{% endif %}
+        {% if r.status != 'CONFIRMED' %}<button name="status" value="CONFIRMED" class="btn btn-outline-secondary">표시 취소 (확정으로 되돌리기)</button>{% endif %}
+      </form>
+      {% else %}
+      <p class="small text-secondary mb-0">촬영일({{ r.date|date:"n/j" }}) 당일부터 촬영 완료·불참(노쇼)을 표시할 수 있습니다.</p>
+      {% endif %}
+    </div></div>
+    {% endif %}
+
+    {% if form %}
     <div class="card shadow-sm"><div class="card-body">
-      <p class="mb-3"><strong>{{ r.professor.name }}</strong> 교수 · {{ r.course.name }}</p>
       <form method="post">{% csrf_token %}
         {% if form.non_field_errors %}<div class="alert alert-danger small">{% for e in form.non_field_errors %}<div>{{ e }}</div>{% endfor %}</div>{% endif %}
         {% for field in form %}
@@ -20,16 +45,23 @@
         </div>
       </form>
       <hr>
-      <form method="post" action="{% url 'booking:reservation_cancel' r.pk %}" onsubmit="return confirm('이 예약을 취소할까요?');">{% csrf_token %}
-        <button class="btn btn-outline-danger">예약 취소</button>
+      <form method="post" action="{% url 'booking:reservation_cancel' r.pk %}" onsubmit="return confirm('이 예약을 취소할까요? 취소 기록은 남습니다.');">{% csrf_token %}
+        <label class="form-label small" for="cancel-reason">취소 사유 (선택)</label>
+        <div class="d-flex gap-2">
+          <input id="cancel-reason" name="reason" maxlength="200" class="form-control" placeholder="예: 교수 요청, 장비 고장">
+          <button class="btn btn-outline-danger text-nowrap">예약 취소</button>
+        </div>
       </form>
       <p class="text-secondary small mt-2">시간을 바꾸면 담당자가 열어 둔 슬롯 안이어야 하며, 다른 예약·불가일과 겹칠 수 없습니다.</p>
     </div></div>
+    {% else %}
+    <a class="btn btn-outline-secondary" href="{% url 'booking:reservations' %}">목록</a>
+    {% endif %}
   </div>
   <div class="col-lg-6">
-    <h2 class="h6">변경 이력</h2>
+    <h2 class="h6">작업 이력</h2>
     <ul class="list-group small">
-      {% for h in history %}<li class="list-group-item">{{ h.created_at|date:"Y-m-d H:i" }} · {{ h.user.name|default:"-" }} · {{ h.get_action_display }}</li>
+      {% for h, change in history %}<li class="list-group-item">{{ h.created_at|date:"Y-m-d H:i" }} · {{ h.user.name|default:"-" }} · <strong>{{ h.get_action_display }}</strong>{% if change %}<div class="text-secondary text-break">{{ change }}</div>{% endif %}</li>
       {% empty %}<li class="list-group-item text-secondary">이력이 없습니다.</li>{% endfor %}
     </ul>
   </div>

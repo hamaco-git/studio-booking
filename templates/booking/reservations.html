@@ -13,22 +13,35 @@
       {% for s in studios %}<option value="{{ s.pk }}" {% if sid == s.pk|stringformat:'s' %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
     </select></div>
   <div class="col-auto"><label class="form-label small" for="f-q">교수·과목</label><input id="f-q" name="q" value="{{ q }}" class="form-control" placeholder="검색"></div>
-  <div class="col-auto form-check ms-2 mb-2"><input class="form-check-input" type="checkbox" name="status" value="all" id="f-all" {% if status == 'all' %}checked{% endif %}><label class="form-check-label" for="f-all">취소 포함</label></div>
+  <div class="col-auto"><label class="form-label small" for="f-status">상태</label>
+    <select id="f-status" name="status" class="form-select">
+      {% for v, l in status_choices %}<option value="{{ v }}" {% if status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select></div>
+  {% if professor %}<input type="hidden" name="professor" value="{{ professor }}">{% endif %}
   <div class="col-auto"><button class="btn btn-outline-primary">조회</button></div>
 </form>
 <div class="card shadow-sm"><div class="table-responsive">
   <table class="table align-middle mb-0">
     <thead class="table-light"><tr><th>날짜</th><th>시간</th><th>스튜디오</th><th>교수</th><th>과목</th><th>상태</th><th></th></tr></thead>
     <tbody>
-    {% for r, can_edit in rows %}
-      <tr{% if r.status == 'CANCELLED' %} class="text-secondary text-decoration-line-through"{% endif %}>
+    {% for r, can_edit, can_mark in rows %}
+      <tr{% if r.status == 'CANCELLED' %} class="text-secondary"{% endif %}>
         <td>{{ r.date|date:"Y-m-d (D)" }}</td>
         <td>{{ r.start_time|time:"H:i" }}~{{ r.end_time|time:"H:i" }}</td>
         <td>{{ r.studio.code }}</td>
         <td>{{ r.professor.name }}</td>
         <td>{{ r.course.name }}</td>
-        <td>{{ r.get_status_display }}</td>
-        <td class="text-end">{% if can_edit and r.status == 'CONFIRMED' %}<a class="btn btn-sm btn-outline-primary" href="{% url 'booking:reservation_edit' r.pk %}">수정·취소</a>{% endif %}</td>
+        <td class="text-nowrap">{% include "booking/_status_badge.html" %}</td>
+        <td class="text-end text-nowrap">
+          {% if can_edit and can_mark and r.status == 'CONFIRMED' %}
+          <form method="post" action="{% url 'booking:reservation_status' r.pk %}" class="d-inline">{% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+            <button name="status" value="COMPLETED" class="btn btn-sm btn-outline-success">완료</button>
+            <button name="status" value="NO_SHOW" class="btn btn-sm btn-outline-danger" onclick="return confirm('{{ r.professor.name|escapejs }} 교수 예약을 불참(노쇼)으로 표시할까요?');">노쇼</button>
+          </form>
+          {% endif %}
+          {% if can_edit %}<a class="btn btn-sm btn-outline-primary" href="{% url 'booking:reservation_edit' r.pk %}">{% if r.status == 'CONFIRMED' %}수정·취소{% else %}상세{% endif %}</a>{% endif %}
+        </td>
       </tr>
     {% empty %}
       <tr><td colspan="7" class="text-center text-secondary py-4">조건에 맞는 예약이 없습니다.</td></tr>

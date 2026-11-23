@@ -36,7 +36,8 @@ class ReservationAdmin(CreatedByMixin, admin.ModelAdmin):
 
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):
-    list_display = ("created_at", "user", "action", "target_table", "target_id")
+    list_display = ("created_at", "user", "action", "target_table", "target_id", "summary")
+    search_fields = ("summary", "user__name")
     list_filter = ("action", "target_table")
 
     def has_add_permission(self, request):

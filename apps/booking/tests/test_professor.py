@@ -109,7 +109,16 @@ class ProfessorCancelTest(StaffBase):
         self.reserve(self.slot(day=TODAY - timedelta(days=5)))
         res = self.client.get(reverse("booking:my_reservations"))
         self.assertContains(res, "까지 가능")
-        self.assertContains(res, "촬영 완료")
+        self.assertContains(res, "촬영일 지남")
+
+    def test_cancel_with_reason_is_recorded(self):
+        r = self.reserve(self.slot(day=TODAY + timedelta(days=5)))
+        self.client.post(reverse("booking:my_cancel", args=[r.pk]), {"reason": "학과 회의"})
+        r.refresh_from_db()
+        self.assertEqual(r.status, Reservation.Status.CANCELLED)
+        self.assertEqual(r.cancel_reason, "학과 회의")
+        self.assertEqual(r.cancelled_by, self.prof)
+        self.assertIsNotNone(r.cancelled_at)
 
 
 class StaffProxyBookingTest(StaffBase):

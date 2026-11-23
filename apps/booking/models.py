@@ -125,15 +125,25 @@ class Blackout(models.Model):
 
 
 class Reservation(models.Model):
-    """촬영 예약. 삭제하지 않고 상태를 '취소'로 바꾼다.
+    """촬영 예약. 삭제하지 않고 상태를 바꿔 기록으로 남긴다.
 
-    같은 스튜디오의 확정 예약끼리는 시간이 겹칠 수 없으며,
+    확정 → 촬영 완료 / 불참(노쇼): 촬영일 당일부터 담당자가 표시
+    확정 → 취소: 교수 본인(기한 내) 또는 담당자. 취소 일시·사유·취소한 사람을 남긴다.
+
+    같은 스튜디오의 취소되지 않은 예약끼리는 시간이 겹칠 수 없으며,
     이는 DB 제약(slot_no_overlap과 같은 방식)으로 강제되어 동시 예약도 막는다.
     """
 
     class Status(models.TextChoices):
         CONFIRMED = "CONFIRMED", "확정"
+        COMPLETED = "COMPLETED", "촬영 완료"
+        NO_SHOW = "NO_SHOW", "불참(노쇼)"
         CANCELLED = "CANCELLED", "취소"
+
+    # 시간을 차지하는(취소되지 않은) 상태
+    ACTIVE_STATUSES = (Status.CONFIRMED, Status.COMPLETED, Status.NO_SHOW)
+    # 담당자가 촬영 당일부터 표시하는 출결 상태
+    ATTENDANCE_STATUSES = (Status.COMPLETED, Status.NO_SHOW)
 
     studio = models.ForeignKey(Studio, on_delete=models.PROTECT, verbose_name="스튜디오")
     course = models.ForeignKey(Course, on_delete=models.PROTECT, verbose_name="과목")
@@ -150,6 +160,12 @@ class Reservation(models.Model):
     end_time = models.TimeField("종료")
     status = models.CharField("상태", max_length=10, choices=Status.choices, default=Status.CONFIRMED)
     memo = models.TextField("메모", blank=True)
+    cancelled_at = models.DateTimeField("취소 일시", null=True, blank=True, editable=False)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, editable=False,
+        related_name="+", verbose_name="취소한 사람",
+    )
+    cancel_reason = models.CharField("취소 사유", max_length=200, blank=True, editable=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, editable=False,
         related_name="+", verbose_name="등록자",
@@ -174,7 +190,7 @@ class Reservation(models.Model):
             ExclusionConstraint(
                 name="reservation_no_overlap",
                 expressions=[(F("studio"), RangeOperators.EQUAL), (TIME_RANGE, RangeOperators.OVERLAPS)],
-                condition=Q(status="CONFIRMED"),
+                condition=~Q(status="CANCELLED"),
             ),
         ]
 
@@ -210,9 +226,9 @@ class Reservation(models.Model):
         if blackout.exists():
             errors.append("촬영 불가일로 지정된 시간입니다.")
 
-        if self.status == self.Status.CONFIRMED:
+        if self.status != self.Status.CANCELLED:
             overlap = Reservation.objects.filter(
-                studio_id=self.studio_id, date=self.date, status=self.Status.CONFIRMED,
+                studio_id=self.studio_id, date=self.date, status__in=self.ACTIVE_STATUSES,
                 start_time__lt=self.end_time, end_time__gt=self.start_time,
             ).exclude(pk=self.pk)
             if overlap.exists():
@@ -221,15 +237,37 @@ class Reservation(models.Model):
         if errors:
             raise ValidationError(errors)
 
+    @property
+    def is_active(self):
+        return self.status != self.Status.CANCELLED
+
+    @property
+    def needs_attendance(self):
+        """촬영일이 지났는데 아직 완료/노쇼 표시가 안 된 예약."""
+        from django.utils import timezone
+
+        return self.status == self.Status.CONFIRMED and self.date < timezone.localdate()
+
+    def can_mark_attendance(self, today=None):
+        from django.utils import timezone
+
+        return self.is_active and self.date <= (today or timezone.localdate())
+
+    def describe(self):
+        """이력에 남길 한 줄 설명 (예: studio1 2026-12-01 09:00~12:00 홍길동 · 영상제작론)."""
+        return (f"{self.studio.code} {self.date:%Y-%m-%d} {self.start_time:%H:%M}~{self.end_time:%H:%M} "
+                f"{self.professor.name} · {self.course.name}")
+
 
 class AuditLog(models.Model):
-    """예약·슬롯·불가일·계정 변경 이력."""
+    """작업 이력: 누가 언제 무엇(예약·슬롯·불가일·과목·계정)을 생성·수정·취소·상태 변경했는지."""
 
     class Action(models.TextChoices):
         CREATE = "CREATE", "생성"
         UPDATE = "UPDATE", "수정"
         DELETE = "DELETE", "삭제"
         CANCEL = "CANCEL", "취소"
+        STATUS = "STATUS", "상태 변경"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, verbose_name="사용자",
@@ -237,15 +275,20 @@ class AuditLog(models.Model):
     action = models.CharField("작업", max_length=10, choices=Action.choices)
     target_table = models.CharField("대상 테이블", max_length=50)
     target_id = models.BigIntegerField("대상 ID")
+    summary = models.CharField("대상 설명", max_length=200, blank=True,
+                               help_text="기록 당시의 대상 정보 (대상이 나중에 바뀌거나 지워져도 남는다)")
     before = models.JSONField("변경 전", null=True, blank=True)
     after = models.JSONField("변경 후", null=True, blank=True)
     created_at = models.DateTimeField("일시", auto_now_add=True)
 
     class Meta:
-        verbose_name = "변경 이력"
-        verbose_name_plural = "변경 이력"
+        verbose_name = "작업 이력"
+        verbose_name_plural = "작업 이력"
         ordering = ["-created_at"]
-        indexes = [models.Index(fields=["target_table", "target_id"])]
+        indexes = [
+            models.Index(fields=["target_table", "target_id"]),
+            models.Index(fields=["created_at"]),
+        ]
 
     def __str__(self):
         return f"{self.created_at:%Y-%m-%d %H:%M} {self.get_action_display()} {self.target_table}#{self.target_id}"

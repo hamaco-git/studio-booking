@@ -54,7 +54,9 @@ def my_reservations(request):
     today = timezone.localdate()
     qs = Reservation.objects.filter(professor=request.user).select_related("studio", "course")
     upcoming = qs.filter(date__gte=today, status=Reservation.Status.CONFIRMED).order_by("date", "start_time")
-    past = qs.filter(Q(date__lt=today) | Q(status=Reservation.Status.CANCELLED)).order_by("-date", "-start_time")[:30]
+    past = qs.filter(
+        Q(date__lt=today) | ~Q(status=Reservation.Status.CONFIRMED)
+    ).order_by("-date", "-start_time")[:30]
     rows = [(r, services.professor_can_cancel(r), services.cancel_deadline(r)) for r in upcoming]
     return render(request, "booking/my_reservations.html", {"rows": rows, "past": past})
 
@@ -66,6 +68,6 @@ def my_cancel(request, pk):
     if not services.professor_can_cancel(r):
         messages.error(request, f"취소 기한({services.cancel_deadline(r):%m/%d})이 지났습니다. 스튜디오 담당자에게 문의해 주세요.")
     else:
-        services.cancel_reservation(request.user, r)
+        services.cancel_reservation(request.user, r, reason=request.POST.get("reason", ""))
         messages.success(request, f"{r.date:%m/%d} {r.start_time:%H:%M} 예약을 취소했습니다.")
     return redirect("booking:my_reservations")

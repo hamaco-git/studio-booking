@@ -13,6 +13,8 @@ urlpatterns = [
     path("reservations/", views.reservations, name="reservations"),
     path("reservations/<int:pk>/", views.reservation_edit, name="reservation_edit"),
     path("reservations/<int:pk>/cancel/", views.reservation_cancel, name="reservation_cancel"),
+    path("reservations/<int:pk>/status/", views.reservation_status, name="reservation_status"),
+    path("records/", views.records, name="records"),
     path("reservations/export/", views.reservations_export, name="reservations_export"),
     path("reservations/new/", views.reservation_new, name="reservation_new"),
     # 교수

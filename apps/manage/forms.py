@@ -2,6 +2,7 @@ from django import forms
 from django.core.validators import validate_email
 
 from apps.accounts.models import User
+from apps.accounts.phone import normalize_phone
 from apps.studios.models import Course, Semester
 
 INPUT = {"class": "form-control"}
@@ -59,7 +60,7 @@ class UserForm(forms.ModelForm):
         widgets = {
             "username": forms.EmailInput(attrs=INPUT),
             "name": forms.TextInput(attrs=INPUT),
-            "phone": forms.TextInput(attrs=INPUT),
+            "phone": forms.TextInput(attrs={**INPUT, "type": "tel", "placeholder": "010-1234-5678", "inputmode": "tel"}),
             "role": forms.Select(attrs=SELECT),
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
@@ -81,6 +82,9 @@ class UserForm(forms.ModelForm):
         if User.objects.filter(username__iexact=value).exclude(pk=self.instance.pk).exists():
             raise forms.ValidationError("이미 등록된 아이디입니다.")
         return value
+
+    def clean_phone(self):
+        return normalize_phone(self.cleaned_data.get("phone"))
 
     def save(self, commit=True):
         user = super().save(commit=False)
