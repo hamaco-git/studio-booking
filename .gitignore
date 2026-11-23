@@ -7,3 +7,9 @@ staticfiles/
 *.sqlite3
 .idea/
 .vscode/
+
+# 비밀번호가 들어 있는 계정 목록은 저장소에 올리지 않음
+accounts*.csv
+계정목록*.csv
+*비밀번호*
+secrets/
