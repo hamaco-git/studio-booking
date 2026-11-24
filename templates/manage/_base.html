@@ -5,9 +5,15 @@
   <li class="nav-item"><a class="nav-link{% if u == 'courses' or u == 'course_new' or u == 'course_edit' %} active{% endif %}" href="{% url 'manage:courses' %}">과목·교수 배정</a></li>
   <li class="nav-item"><a class="nav-link{% if u == 'semesters' %} active{% endif %}" href="{% url 'manage:semesters' %}">학기</a></li>
   <li class="nav-item"><a class="nav-link{% if u == 'users' or u == 'user_new' or u == 'user_edit' %} active{% endif %}" href="{% url 'manage:users' %}">계정</a></li>
-  <li class="nav-item"><a class="nav-link{% if u == 'users_import' %} active{% endif %}" href="{% url 'manage:users_import' %}">교수 일괄 등록</a></li>
+  <li class="nav-item"><a class="nav-link{% if u == 'users_import' or u == 'courses_import' %} active{% endif %}" href="{% url 'manage:users_import' %}">일괄 등록</a></li>
   <li class="nav-item"><a class="nav-link{% if u == 'logs' %} active{% endif %}" href="{% url 'manage:logs' %}">작업 이력</a></li>
 </ul>
+{% if u == 'users_import' or u == 'courses_import' %}
+<ul class="nav nav-pills mb-4">
+  <li class="nav-item"><a class="nav-link{% if u == 'users_import' %} active{% endif %}" href="{% url 'manage:users_import' %}">교수 일괄 등록</a></li>
+  <li class="nav-item"><a class="nav-link{% if u == 'courses_import' %} active{% endif %}" href="{% url 'manage:courses_import' %}">과목 일괄 등록</a></li>
+</ul>
+{% endif %}
 {% endwith %}
 {% block manage %}{% endblock %}
 {% endblock %}

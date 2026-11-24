@@ -12,7 +12,11 @@
     </select></div>
   <div class="col-auto"><label class="form-label small" for="f-q">과목·교수·교수설계자</label><input id="f-q" name="q" value="{{ q }}" class="form-control" placeholder="검색"></div>
   <div class="col-auto"><button class="btn btn-outline-primary">조회</button></div>
-  <div class="col text-end"><a class="btn btn-primary" href="{% url 'manage:course_new' %}{% if semester %}?semester={{ semester.pk }}{% endif %}">과목 추가</a></div>
+  <div class="col text-end d-flex flex-wrap justify-content-end gap-2">
+    {% if semester %}<a class="btn btn-outline-secondary" href="{% url 'manage:courses_export' %}?semester={{ semester.pk }}">CSV 내려받기</a>{% endif %}
+    <a class="btn btn-outline-secondary" href="{% url 'manage:courses_import' %}">CSV 일괄 등록</a>
+    <a class="btn btn-primary" href="{% url 'manage:course_new' %}{% if semester %}?semester={{ semester.pk }}{% endif %}">과목 추가</a>
+  </div>
 </form>
 {% if not semester %}
 <div class="alert alert-warning">먼저 <a href="{% url 'manage:semesters' %}">학기</a>를 등록해 주세요.</div>

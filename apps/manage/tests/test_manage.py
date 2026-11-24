@@ -214,6 +214,128 @@ class ImportTest(StaffBase):
         self.assertRegex(services.temp_password(), r"^wcu-\d{4}-[a-z]{4}$")
 
 
+class CourseImportTest(StaffBase):
+    HEAD = "학기,과목코드,과목명,스튜디오,담당 교수 아이디,교수설계자 아이디,사용 여부\n"
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        cls.designer = User.objects.create_user("des1", password="x", name="설계자",
+                                                role=User.Role.DESIGNER, must_change_password=False)
+
+    def setUp(self):
+        self.client.force_login(self.staff)
+
+    def preview(self, text, encoding="utf-8", semester=True):
+        f = SimpleUploadedFile("c.csv", (self.HEAD + text).encode(encoding), content_type="text/csv")
+        data = {"file": f, "step": "preview"}
+        if semester:
+            data["semester"] = self.course.semester.pk
+        return self.client.post(reverse("manage:courses_import"), data)
+
+    def apply(self):
+        return self.client.post(reverse("manage:courses_import"), {"step": "apply"}, follow=True)
+
+    def test_preview_does_not_save_then_apply_creates(self):
+        res = self.preview("2027-1,C2,새과목,studio1,kim;LEE,des1,\n")
+        self.assertContains(res, "미리보기")
+        self.assertContains(res, "신규 1")
+        self.assertFalse(Course.objects.filter(code="C2").exists())
+        res = self.apply()
+        self.assertContains(res, "과목 1개를 저장했습니다")
+        c = Course.objects.get(code="C2")
+        self.assertEqual(c.studio, self.s1)
+        self.assertEqual(set(c.professors.all()), {self.prof, self.other})
+        self.assertEqual(c.designer, self.designer)
+        self.assertTrue(c.is_active)
+        self.assertTrue(AuditLog.objects.filter(target_table="studios_course", target_id=c.pk,
+                                                action="CREATE").exists())
+        # 같은 미리보기를 두 번 저장할 수 없다
+        self.assertContains(self.apply(), "미리보기가 만료")
+
+    def test_update_keeps_blank_fields_and_replaces_professors(self):
+        self.course.designer = self.designer
+        self.course.save()
+        self.preview(",C1,영상제작 개정,Studio 1,lee,,\n")  # 학기 칸이 비면 선택한 학기
+        self.apply()
+        self.course.refresh_from_db()
+        self.assertEqual(self.course.name, "영상제작 개정")
+        self.assertEqual(list(self.course.professors.all()), [self.other])
+        self.assertEqual(self.course.designer, self.designer)  # 빈 칸은 그대로
+
+    def test_dash_clears_designer_and_stop(self):
+        self.course.designer = self.designer
+        self.course.save()
+        res = self.preview("2027-1,C1,,,,-,중지\n")
+        self.assertContains(res, "갱신 1")
+        self.apply()
+        self.course.refresh_from_db()
+        self.assertIsNone(self.course.designer)
+        self.assertFalse(self.course.is_active)
+        self.assertEqual(list(self.course.professors.all()), [self.prof])
+
+    def test_unchanged_row(self):
+        res = self.preview("2027-1,C1,영상제작,studio1,kim,,사용\n")
+        self.assertContains(res, "변경 없음 1")
+        self.assertContains(res, "저장할 행이 없습니다")
+
+    def test_errors_reported_and_skipped(self):
+        res = self.preview(
+            "2099-9,X1,과목,studio1,,,\n"        # 없는 학기
+            "2027-1,X2,과목,studio9,,,\n"        # 없는 스튜디오
+            "2027-1,X3,과목,studio2,,,\n"        # 담당이 아닌 스튜디오
+            "2027-1,X4,과목,studio1,nobody,,\n"  # 없는 교수
+            "2027-1,X5,과목,studio1,staff1,,\n"  # 교수가 아님
+            "2027-1,X6,과목,studio1,,kim,\n"     # 교수설계자가 아님
+            "2027-1,X7,,studio1,,,\n"            # 과목명 없음
+            "2027-1,X8,과목,studio1,,,몰라\n"     # 사용 여부 오류
+            "2027-1,OK,정상,studio1,kim,,\n"
+            "2027-1,OK,중복,studio1,,,\n")       # 파일 안 중복
+        self.assertContains(res, "오류 9")
+        for msg in ["등록되지 않은 학기", "없는 스튜디오", "담당 스튜디오가 아닙니다", "없는 교수 아이디",
+                    "교수 계정이 아닙니다", "교수설계자 계정이 아닙니다", "과목명이 필요", "사용 여부는",
+                    "같은 학기·과목코드"]:
+            self.assertContains(res, msg)
+        self.apply()
+        self.assertEqual(list(Course.objects.filter(code__startswith="X")), [])
+        self.assertEqual(Course.objects.get(code="OK").name, "정상")
+
+    def test_staff_cannot_update_other_studio_course(self):
+        Course.objects.create(semester=self.course.semester, code="S2", name="남의과목", studio=self.s2)
+        res = self.preview("2027-1,S2,바꾸기,,,,\n")
+        self.assertContains(res, "담당 스튜디오가 아닌 과목")
+
+    def test_super_admin_any_studio_and_cp949(self):
+        self.client.force_login(self.admin)
+        self.preview("2027-1,C3,엑셀과목,studio2,,,\n", encoding="cp949")
+        self.apply()
+        self.assertEqual(Course.objects.get(code="C3").studio, self.s2)
+
+    def test_template_and_export(self):
+        text = self.client.get(reverse("manage:courses_import_template")).content.decode("utf-8-sig")
+        self.assertTrue(text.startswith("학기,과목코드"))
+        out = self.client.get(reverse("manage:courses_export"),
+                              {"semester": self.course.semester.pk}).content.decode("utf-8-sig")
+        rows = list(csv.reader(io.StringIO(out)))
+        self.assertEqual(rows[1], ["2027-1", "C1", "영상제작", "studio1", "kim", "", "사용"])
+        # 내려받은 파일을 그대로 올리면 변경 없음
+        f = SimpleUploadedFile("c.csv", out.encode("utf-8-sig"), content_type="text/csv")
+        res = self.client.post(reverse("manage:courses_import"), {"file": f, "step": "preview"})
+        self.assertContains(res, "변경 없음 1")
+
+    def test_menu_and_entry_from_courses(self):
+        res = self.client.get(reverse("manage:courses"))
+        self.assertContains(res, reverse("manage:courses_import"))
+        res = self.client.get(reverse("manage:courses_import"))
+        self.assertContains(res, "일괄 등록")
+        self.assertContains(res, "교수 일괄 등록")
+        self.assertContains(res, "과목 일괄 등록")
+
+    def test_professor_forbidden(self):
+        self.client.force_login(self.prof)
+        self.assertEqual(self.client.get(reverse("manage:courses_import")).status_code, 403)
+
+
 class ExportAndLogsTest(StaffBase):
     def test_excel_export(self):
         self.client.force_login(self.staff)

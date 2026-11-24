@@ -112,3 +112,17 @@ class ImportForm(forms.Form):
         current = Semester.objects.filter(is_current=True).first() or Semester.objects.first()
         if current:
             self.fields["semester"].initial = current.pk
+
+
+class CourseImportForm(forms.Form):
+    file = forms.FileField(label="CSV 파일", widget=forms.ClearableFileInput(attrs={"class": "form-control", "accept": ".csv"}))
+    semester = forms.ModelChoiceField(
+        Semester.objects.all(), label="학기 칸이 비었을 때 쓸 학기", required=False,
+        empty_label="(학기 칸 필수)", widget=forms.Select(attrs=SELECT),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        current = Semester.objects.filter(is_current=True).first() or Semester.objects.first()
+        if current:
+            self.fields["semester"].initial = current.pk
