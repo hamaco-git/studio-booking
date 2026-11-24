@@ -105,9 +105,14 @@ uv run python manage.py runserver 0.0.0.0:8000
 uv run python manage.py seed_demo
 ```
 
-담당자 `staff1@demo.local`~`staff4@demo.local`, 교수 `prof1@demo.local`~`prof6@demo.local`
-(비밀번호 모두 `demo1234!`)과 데모 과목, 이번 주·다음 주 평일 오전/오후 슬롯, 예약 몇 건이 만들어집니다.
+담당자 `staff1@demo.local`~`staff4@demo.local`, 교수 `prof1@demo.local`~`prof6@demo.local`,
+교수설계자 `designer1@demo.local`~`designer3@demo.local`(교수설계자1~3) (비밀번호 모두 `demo1234!`)과 데모 과목, 이번 주·다음 주 평일 오전/오후 슬롯, 예약 몇 건이 만들어집니다.
 `.env`의 `DEBUG=True`일 때만 실행되므로 운영 서버에서는 동작하지 않습니다.
+
+교수설계자 샘플 계정만 따로 만들려면 `uv run python manage.py seed_designers`를 실행합니다.
+현재 학기 과목 중 교수설계자가 없는 과목에 교수설계자1~3을 돌아가며 배정합니다.
+`.env`가 `DEBUG=False`이면 `DEBUG=True uv run python manage.py seed_designers`처럼 앞에 붙여 실행합니다.
+교수설계자로 로그인하면 **촬영 일정 달력**과 **촬영 일정 목록**에서 담당 과목의 촬영 예약만 조회할 수 있습니다(수정 불가).
 
 담당자로 로그인하면 다음 메뉴가 보입니다.
 

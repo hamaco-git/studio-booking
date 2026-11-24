@@ -2,7 +2,8 @@
 
     uv run python manage.py seed_demo
 
-담당자 staff1~4@demo.local, 교수 prof1~6@demo.local (비밀번호 모두 demo1234!)과
+담당자 staff1~4@demo.local, 교수 prof1~6@demo.local, 교수설계자 designer1~3@demo.local
+(비밀번호 모두 demo1234!)과
 현재 학기·과목, 이번 주와 다음 주 슬롯, 예약 몇 건을 만든다.
 """
 
@@ -15,6 +16,8 @@ from django.utils import timezone
 from apps.accounts.models import User
 from apps.booking.models import OpenSlot, Reservation, SlotTemplate
 from apps.studios.models import Course, CourseProfessor, Semester, Studio, StudioStaff
+
+from .seed_designers import seed_designers
 
 PASSWORD = "demo1234!"
 
@@ -55,6 +58,8 @@ class Command(BaseCommand):
             CourseProfessor.objects.get_or_create(course=c, professor=p)
             courses.append(c)
 
+        seed_designers()
+
         monday = today - timedelta(days=today.weekday())
         templates = list(SlotTemplate.objects.filter(is_active=True))
         made = 0
@@ -73,4 +78,5 @@ class Command(BaseCommand):
             if slot and not Reservation.objects.filter(professor=p).exists():
                 Reservation.objects.create(studio=c.studio, course=c, professor=p, slot=slot, date=slot.date,
                                            start_time=slot.start_time, end_time=slot.end_time)
-        self.stdout.write(f"완료: 슬롯 {made}개 추가. 담당자 staff1~4@demo.local, 교수 prof1~6@demo.local / 비밀번호 {PASSWORD}")
+        self.stdout.write(f"완료: 슬롯 {made}개 추가. 담당자 staff1~4@demo.local, 교수 prof1~6@demo.local, "
+                          f"교수설계자 designer1~3@demo.local / 비밀번호 {PASSWORD}")

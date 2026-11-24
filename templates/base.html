@@ -31,6 +31,13 @@
       <li class="nav-item"><a class="nav-link{% if request.resolver_match.namespace == 'manage' %} active{% endif %}" href="{% url 'manage:courses' %}">관리</a></li>
     </ul>
     {% endwith %}
+    {% elif user.is_designer %}
+    {% with u=request.resolver_match.url_name %}
+    <ul class="navbar-nav flex-wrap me-auto">
+      <li class="nav-item"><a class="nav-link{% if u == 'calendar' %} active{% endif %}" href="{% url 'booking:calendar' %}">촬영 일정 달력</a></li>
+      <li class="nav-item"><a class="nav-link{% if u == 'reservations' %} active{% endif %}" href="{% url 'booking:reservations' %}">촬영 일정 목록</a></li>
+    </ul>
+    {% endwith %}
     {% elif user.is_professor %}
     {% with u=request.resolver_match.url_name %}
     <ul class="navbar-nav flex-wrap me-auto">

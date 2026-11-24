@@ -2,6 +2,7 @@
 
 - 슈퍼관리자: 모든 스튜디오 수정 가능
 - 담당자: 담당 스튜디오만 수정, 다른 스튜디오는 조회만
+- 교수설계자: 담당 과목의 촬영 일정만 조회 (수정 불가)
 - 교수: 담당 과목의 지정 스튜디오만 조회·예약
 """
 
@@ -26,6 +27,20 @@ def staff_required(view):
     return wrapper
 
 
+def schedule_viewer_required(view):
+    """담당자·슈퍼관리자·교수설계자 접근 (현황 달력, 예약 목록 조회)."""
+
+    @login_required
+    @wraps(view)
+    def wrapper(request, *args, **kwargs):
+        u = request.user
+        if not (u.is_studio_staff or u.is_super_admin or u.is_designer):
+            raise PermissionDenied
+        return view(request, *args, **kwargs)
+
+    return wrapper
+
+
 def editable_studios(user):
     """이 사용자가 슬롯·불가일·예약을 수정할 수 있는 스튜디오."""
     qs = Studio.objects.filter(is_active=True)
@@ -41,6 +56,8 @@ def viewable_studios(user):
     qs = Studio.objects.filter(is_active=True)
     if user.is_super_admin or user.is_studio_staff:
         return qs
+    if user.is_designer:
+        return qs.filter(course__designer=user).distinct()
     return qs.filter(course__professors=user, course__is_active=True).distinct()
 
 

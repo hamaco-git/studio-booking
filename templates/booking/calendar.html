@@ -1,8 +1,14 @@
 {% extends "base.html" %}
-{% block title %}현황 달력 · 스튜디오 예약{% endblock %}
+{% block title %}{% if user.is_designer %}촬영 일정 달력{% else %}현황 달력{% endif %} · 스튜디오 예약{% endblock %}
 {% block content %}
 <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-  <h1 class="h4 m-0 me-auto">현황 달력</h1>
+  <h1 class="h4 m-0 me-auto">{% if user.is_designer %}담당 과목 촬영 일정{% else %}현황 달력{% endif %}</h1>
+  {% if designers %}
+  <select id="designer" class="form-select w-auto" aria-label="교수설계자">
+    <option value="">전체 교수설계자</option>
+    {% for d in designers %}<option value="{{ d.pk }}" {% if selected_designer == d.pk|stringformat:'s' %}selected{% endif %}>{{ d.name }}</option>{% endfor %}
+  </select>
+  {% endif %}
   <select id="studio" class="form-select w-auto" aria-label="스튜디오">
     <option value="">전체 스튜디오</option>
     {% for s in studios %}<option value="{{ s.pk }}" {% if selected == s.pk|stringformat:'s' %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
@@ -10,11 +16,16 @@
 </div>
 <div class="d-flex flex-wrap gap-3 small mb-2">
   {% for s in studios %}<span><span class="d-inline-block rounded me-1" style="width:12px;height:12px;background:{{ s.color }}"></span>{{ s.code }} 예약</span>{% endfor %}
-  <span><span class="d-inline-block rounded me-1" style="width:12px;height:12px;background:#d1f0dc;border:1px solid #7ccf9b"></span>예약 가능</span>
+  {% if not user.is_designer %}<span><span class="d-inline-block rounded me-1" style="width:12px;height:12px;background:#d1f0dc;border:1px solid #7ccf9b"></span>예약 가능</span>{% endif %}
   <span><span class="d-inline-block rounded me-1" style="width:12px;height:12px;background:#f8d7da;border:1px solid #f1aeb5"></span>촬영 불가</span>
 </div>
 <div class="card shadow-sm"><div class="card-body"><div id="cal"></div></div></div>
-<p class="text-secondary small mt-2">담당 스튜디오의 예약을 누르면 수정·취소 화면으로, 예약 가능 칸을 누르면 대리 예약 화면으로 이동합니다.</p>
+{% if user.is_designer %}
+<p class="text-secondary small mt-2">담당 교수설계자로 배정된 과목의 촬영 예약만 보입니다. 일정 변경은 스튜디오 담당자에게 요청하세요.</p>
+{% else %}
+<p class="text-secondary small mt-2">담당 스튜디오의 예약을 누르면 수정·취소 화면으로, 예약 가능 칸을 누르면 대리 예약 화면으로 이동합니다.
+  교수설계자를 고르면 그 교수설계자 담당 과목의 촬영 일정만 보입니다.</p>
+{% endif %}
 {% endblock %}
 {% block scripts %}
 <style>
@@ -29,6 +40,7 @@
 document.addEventListener('DOMContentLoaded', function () {
   const editable = new Set({{ editable_ids|safe }});
   const studioSel = document.getElementById('studio');
+  const designerSel = document.getElementById('designer');
   const cal = new FullCalendar.Calendar(document.getElementById('cal'), {
     initialView: 'dayGridMonth',
     locale: 'ko',
@@ -44,7 +56,8 @@ document.addEventListener('DOMContentLoaded', function () {
     moreLinkText: n => `+${n}개 더`,
     eventTimeFormat: {hour: '2-digit', minute: '2-digit', hour12: false},
     events: function (info, ok, fail) {
-      const p = new URLSearchParams({start: info.startStr.slice(0, 10), end: info.endStr.slice(0, 10), studio: studioSel.value});
+      const p = new URLSearchParams({start: info.startStr.slice(0, 10), end: info.endStr.slice(0, 10), studio: studioSel.value,
+                                     designer: designerSel ? designerSel.value : ''});
       fetch('{% url "booking:events" %}?' + p).then(r => r.json()).then(ok).catch(fail);
     },
     eventClassNames: function (arg) {
@@ -75,6 +88,7 @@ document.addEventListener('DOMContentLoaded', function () {
   });
   cal.render();
   studioSel.addEventListener('change', () => cal.refetchEvents());
+  if (designerSel) designerSel.addEventListener('change', () => cal.refetchEvents());
 });
 </script>
 {% endblock %}

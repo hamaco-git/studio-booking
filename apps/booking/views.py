@@ -22,9 +22,24 @@ from .models import AuditLog, Blackout, OpenSlot, Reservation
 from .permissions import (
     editable_studios,
     require_edit,
+    schedule_viewer_required,
     staff_required,
     viewable_studios,
 )
+
+
+def _designers():
+    from apps.accounts.models import User
+
+    return User.objects.filter(role=User.Role.DESIGNER, is_active=True).order_by("name")
+
+
+def _designer_filter(request):
+    """담당자·슈퍼관리자가 고른 교수설계자 ID (교수설계자 본인은 항상 자기 과목만 본다)."""
+    if request.user.is_designer:
+        return None
+    did = request.GET.get("designer") or ""
+    return did if did.isdigit() else None
 
 
 def _pick_studio(request, studios):
@@ -36,13 +51,15 @@ def _pick_studio(request, studios):
 # ── 현황 달력 ──────────────────────────────────────────────
 
 
-@staff_required
+@schedule_viewer_required
 def calendar(request):
     studios = viewable_studios(request.user)
     return render(request, "booking/calendar.html", {
         "studios": studios,
         "editable_ids": list(editable_studios(request.user).values_list("pk", flat=True)),
         "selected": request.GET.get("studio", ""),
+        "designers": [] if request.user.is_designer else _designers(),
+        "selected_designer": _designer_filter(request) or "",
     })
 
 
@@ -65,6 +82,7 @@ def events(request):
     """달력 데이터(JSON). 슬롯·예약·불가일을 FullCalendar 이벤트 형식으로 돌려준다.
 
     교수에게는 다른 교수의 이름·과목을 숨기고 "예약됨"으로만 보여준다.
+    교수설계자에게는 담당 과목의 예약과 촬영 불가일만 보여준다 (예약 가능 슬롯은 숨김).
     """
     user = request.user
     studios = viewable_studios(user)
@@ -73,20 +91,27 @@ def events(request):
         studios = studios.filter(pk=sid) if sid.isdigit() else studios.none()
     start, end = _parse_range(request)
     is_manager = user.is_studio_staff or user.is_super_admin
+    show_detail = is_manager or user.is_designer
+    did = _designer_filter(request) if is_manager else None
     out = []
 
-    reservations = list(Reservation.objects.filter(
+    reservations = Reservation.objects.filter(
         studio__in=studios, date__range=(start, end), status__in=Reservation.ACTIVE_STATUSES,
-    ).select_related("studio", "professor", "course"))
+    ).select_related("studio", "professor", "course")
+    if user.is_designer:
+        reservations = reservations.filter(course__designer=user)
+    elif did:
+        reservations = reservations.filter(course__designer_id=did)
+    reservations = list(reservations)
     reserved_slot_ids = set()
     for r in reservations:
         reserved_slot_ids.add(r.slot_id)
         mine = r.professor_id == user.pk
-        if is_manager or mine:
+        if show_detail or mine:
             title = f"{r.studio.code} {r.professor.name} · {r.course.name}"
-            if is_manager and r.status == Reservation.Status.NO_SHOW:
+            if show_detail and r.status == Reservation.Status.NO_SHOW:
                 title = f"[노쇼] {title}"
-            elif is_manager and r.status == Reservation.Status.COMPLETED:
+            elif show_detail and r.status == Reservation.Status.COMPLETED:
                 title = f"[완료] {title}"
         else:
             title = f"{r.studio.code} 예약됨"
@@ -95,16 +120,20 @@ def events(request):
             "start": _hhmm(r.date, r.start_time), "end": _hhmm(r.date, r.end_time),
             "color": r.studio.color,
             "extendedProps": {"kind": "reservation", "id": r.pk, "studio": r.studio_id, "mine": mine,
-                              "status": r.status if (is_manager or mine) else "",
-                              # 교수 메모는 담당자·관리자와 본인에게만 보낸다.
-                              "memo": r.memo.strip() if (is_manager or mine) else ""},
+                              "status": r.status if (show_detail or mine) else "",
+                              # 교수 메모는 담당자·관리자·교수설계자와 본인에게만 보낸다.
+                              "memo": r.memo.strip() if (show_detail or mine) else ""},
         })
 
     blackouts = list(Blackout.objects.filter(
         Q(studio__in=studios) | Q(studio__isnull=True), date__range=(start, end),
     ).select_related("studio"))
     today = timezone.localdate()
-    for s in OpenSlot.objects.filter(studio__in=studios, date__range=(start, end)).select_related("studio"):
+    slots = OpenSlot.objects.filter(studio__in=studios, date__range=(start, end)).select_related("studio")
+    if user.is_designer or did:
+        # 교수설계자 일정 보기에서는 예약 가능 슬롯 대신 촬영 일정만 보여준다.
+        slots = slots.none()
+    for s in slots:
         # 예약·불가일과 겹치는 슬롯은 "예약 가능"으로 보이지 않게 한다.
         if s.pk in reserved_slot_ids or any(
             r.studio_id == s.studio_id and r.date == s.date
@@ -256,15 +285,21 @@ def _filtered_reservations(request):
     pid = request.GET.get("professor")
     if pid and pid.isdigit():
         qs = qs.filter(professor_id=pid)
+    if request.user.is_designer:
+        qs = qs.filter(course__designer=request.user)
+    did = _designer_filter(request)
+    if did:
+        qs = qs.filter(course__designer_id=did)
     q = (request.GET.get("q") or "").strip()
     if q:
         qs = qs.filter(Q(professor__name__icontains=q) | Q(course__name__icontains=q))
     ctx = {"studios": studios, "start": start, "end": end, "sid": sid or "", "q": q,
-           "status": status, "professor": pid or "", "status_choices": STATUS_FILTERS}
+           "status": status, "professor": pid or "", "status_choices": STATUS_FILTERS,
+           "designers": [] if request.user.is_designer else _designers(), "designer": did or ""}
     return qs.order_by("date", "start_time", "studio__code"), ctx
 
 
-@staff_required
+@schedule_viewer_required
 def reservations(request):
     qs, ctx = _filtered_reservations(request)
     editable_ids = set(editable_studios(request.user).values_list("pk", flat=True))
@@ -275,7 +310,7 @@ def reservations(request):
     return render(request, "booking/reservations.html", ctx)
 
 
-@staff_required
+@schedule_viewer_required
 def reservations_export(request):
     """예약 목록을 엑셀(xlsx)로 내려받기. 화면의 조회 조건을 그대로 사용한다."""
     from openpyxl import Workbook
@@ -286,22 +321,23 @@ def reservations_export(request):
     wb = Workbook()
     ws = wb.active
     ws.title = "예약"
-    headers = ["날짜", "요일", "시작", "종료", "스튜디오", "교수", "과목", "상태", "메모", "등록자", "등록일시",
+    headers = ["날짜", "요일", "시작", "종료", "스튜디오", "교수", "과목", "교수설계자", "상태", "메모", "등록자", "등록일시",
                "취소 일시", "취소한 사람", "취소 사유"]
     ws.append(headers)
     for c in ws[1]:
         c.font = Font(bold=True)
     days = "월화수목금토일"
-    for r in qs.select_related("created_by", "cancelled_by"):
+    for r in qs.select_related("created_by", "cancelled_by", "course__designer"):
         ws.append([
             r.date, days[r.date.weekday()], r.start_time.strftime("%H:%M"), r.end_time.strftime("%H:%M"),
-            r.studio.name, r.professor.name, r.course.name, r.get_status_display(), r.memo,
+            r.studio.name, r.professor.name, r.course.name,
+            r.course.designer.name if r.course.designer else "", r.get_status_display(), r.memo,
             r.created_by.name if r.created_by else "",
             timezone.localtime(r.created_at).strftime("%Y-%m-%d %H:%M"),
             timezone.localtime(r.cancelled_at).strftime("%Y-%m-%d %H:%M") if r.cancelled_at else "",
             r.cancelled_by.name if r.cancelled_by else "", r.cancel_reason,
         ])
-    for i, w in enumerate([12, 5, 7, 7, 12, 12, 24, 10, 30, 12, 17, 17, 12, 30], 1):
+    for i, w in enumerate([12, 5, 7, 7, 12, 12, 24, 12, 10, 30, 12, 17, 17, 12, 30], 1):
         ws.column_dimensions[get_column_letter(i)].width = w
     for row in ws.iter_rows(min_row=2, max_col=1):
         row[0].number_format = "yyyy-mm-dd"

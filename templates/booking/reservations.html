@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}예약 목록 · 스튜디오 예약{% endblock %}
+{% block title %}{% if user.is_designer %}촬영 일정 목록{% else %}예약 목록{% endif %} · 스튜디오 예약{% endblock %}
 {% block content %}
 <div class="d-flex align-items-center mb-3">
-  <h1 class="h4 m-0 me-auto">예약 목록</h1>
+  <h1 class="h4 m-0 me-auto">{% if user.is_designer %}담당 과목 촬영 일정{% else %}예약 목록{% endif %}</h1>
   <a class="btn btn-outline-success" href="{% url 'booking:reservations_export' %}?{{ query }}">엑셀 내려받기</a>
 </div>
 <form method="get" class="row g-2 align-items-end mb-3">
@@ -17,6 +17,12 @@
     <select id="f-status" name="status" class="form-select">
       {% for v, l in status_choices %}<option value="{{ v }}" {% if status == v %}selected{% endif %}>{{ l }}</option>{% endfor %}
     </select></div>
+  {% if designers %}
+  <div class="col-auto"><label class="form-label small" for="f-designer">교수설계자</label>
+    <select id="f-designer" name="designer" class="form-select"><option value="">전체</option>
+      {% for d in designers %}<option value="{{ d.pk }}" {% if designer == d.pk|stringformat:'s' %}selected{% endif %}>{{ d.name }}</option>{% endfor %}
+    </select></div>
+  {% endif %}
   {% if professor %}<input type="hidden" name="professor" value="{{ professor }}">{% endif %}
   <div class="col-auto"><button class="btn btn-outline-primary">조회</button></div>
 </form>
