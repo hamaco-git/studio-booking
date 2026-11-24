@@ -120,7 +120,9 @@ def events(request):
             "start": _hhmm(r.date, r.start_time), "end": _hhmm(r.date, r.end_time),
             "color": r.studio.color,
             "extendedProps": {"kind": "reservation", "id": r.pk, "studio": r.studio_id, "mine": mine,
-                              "status": r.status if (show_detail or mine) else ""},
+                              "status": r.status if (show_detail or mine) else "",
+                              # 교수 메모는 담당자·관리자·교수설계자와 본인에게만 보낸다.
+                              "memo": r.memo.strip() if (show_detail or mine) else ""},
         })
 
     blackouts = list(Blackout.objects.filter(

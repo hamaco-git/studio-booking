@@ -201,6 +201,16 @@ class EventsApiTest(StaffBase):
         self.assertNotIn("이교수", res["title"])
         self.assertIn("예약됨", res["title"])
 
+    def test_memo_only_for_staff_and_owner(self):
+        r = self.reserve(self.slot())
+        Reservation.objects.filter(pk=r.pk).update(memo="  크로마키 배경 요청  ")
+        memo = lambda user: [e for e in self.get(user) if e["extendedProps"]["kind"] == "reservation"][0][
+            "extendedProps"]["memo"]
+        self.assertEqual(memo(self.staff), "크로마키 배경 요청")
+        self.assertEqual(memo(self.prof), "크로마키 배경 요청")
+        CourseProfessor.objects.create(course=self.course, professor=self.other)
+        self.assertEqual(memo(self.other), "")
+
     def test_calendar_page_renders(self):
         self.client.force_login(self.staff)
         self.assertContains(self.client.get(reverse("booking:calendar")), "현황 달력")
