@@ -2,6 +2,7 @@ from django.contrib.auth.models import AbstractUser, UserManager as BaseUserMana
 from django.db import models
 
 from .phone import normalize_phone, validate_phone
+from .validators import LOGIN_ID_HELP, validate_login_id
 
 
 class UserManager(BaseUserManager):
@@ -15,7 +16,8 @@ class UserManager(BaseUserManager):
 class User(AbstractUser):
     """모든 계정(슈퍼관리자, 스튜디오 담당자, 교수설계자, 교수).
 
-    로그인 ID는 username 필드를 쓰며 학교 이메일을 넣는다.
+    로그인 ID는 username 필드를 쓰며 이메일이 아닌 아이디(예: prof01)를 넣는다.
+    이메일 주소가 필요하면 email 필드(선택)에 따로 둔다.
     비밀번호는 Django가 암호화(PBKDF2)해서 저장한다.
     """
 
@@ -25,6 +27,10 @@ class User(AbstractUser):
         DESIGNER = "DESIGNER", "교수설계자"
         PROFESSOR = "PROFESSOR", "교수"
 
+    username = models.CharField(
+        "아이디", max_length=150, unique=True, validators=[validate_login_id], help_text=LOGIN_ID_HELP,
+        error_messages={"unique": "이미 등록된 아이디입니다."},
+    )
     name = models.CharField("이름", max_length=50)
     phone = models.CharField(
         "휴대폰 번호", max_length=20, blank=True, validators=[validate_phone],
@@ -33,7 +39,7 @@ class User(AbstractUser):
     role = models.CharField("역할", max_length=10, choices=Role.choices, default=Role.PROFESSOR)
     must_change_password = models.BooleanField("비밀번호 변경 필요", default=True)
 
-    REQUIRED_FIELDS = ["email", "name"]
+    REQUIRED_FIELDS = ["name"]
 
     objects = UserManager()
 

@@ -6,8 +6,8 @@
     <h2 class="h6 mb-3">CSV 파일로 교수 계정 만들기</h2>
     <ol class="small">
       <li><a href="{% url 'manage:users_import_template' %}">양식(CSV) 내려받기</a> 후 엑셀에서 작성합니다.</li>
-      <li>열 순서: {{ headers|join:", " }}. 휴대폰 번호는 하이픈(-) 없이 써도 되고, 과목코드는 여러 개면 세미콜론(;)으로 구분합니다. 둘 다 비워도 됩니다.</li>
-      <li>"CSV" 형식으로 저장해 올립니다. 이미 있는 이메일은 새로 만들지 않고 과목 배정만 하며, 휴대폰 번호 칸이 채워져 있으면 그 번호로 바꿉니다.</li>
+      <li>열 순서: {{ headers|join:", " }}. 휴대폰 번호는 하이픈(-) 없이 써도 되고, 과목코드는 여러 개면 세미콜론(;)으로 구분합니다. 둘 다 비워도 됩니다. 아이디는 이메일이 아닌 아이디만 적습니다 (예: prof01).</li>
+      <li>"CSV" 형식으로 저장해 올립니다. 이미 있는 아이디는 새로 만들지 않고 과목 배정만 하며, 휴대폰 번호 칸이 채워져 있으면 그 번호로 바꿉니다.</li>
     </ol>
     <form method="post" enctype="multipart/form-data">{% csrf_token %}
       <div class="mb-3"><label class="form-label" for="{{ form.file.id_for_label }}">CSV 파일</label>{{ form.file }}
@@ -25,11 +25,11 @@
     <div class="alert alert-warning small">임시 비밀번호는 지금 한 번만 볼 수 있습니다. 결과 파일을 내려받아 교수님들께 안전하게 전달해 주세요.</div>
     <div class="card shadow-sm"><div class="table-responsive">
       <table class="table table-sm align-middle mb-0">
-        <thead class="table-light text-nowrap"><tr><th>행</th><th>이메일</th><th>이름</th><th>결과</th><th>임시 비밀번호</th><th>비고</th></tr></thead>
+        <thead class="table-light text-nowrap"><tr><th>행</th><th>아이디</th><th>이름</th><th>결과</th><th>임시 비밀번호</th><th>비고</th></tr></thead>
         <tbody>
         {% for r in results %}
           <tr{% if r.status == '오류' %} class="table-danger"{% endif %}>
-            <td>{{ r.row }}</td><td>{{ r.email }}</td><td class="text-nowrap">{{ r.name }}</td><td class="text-nowrap">{{ r.status }}</td>
+            <td>{{ r.row }}</td><td>{{ r.username }}</td><td class="text-nowrap">{{ r.name }}</td><td class="text-nowrap">{{ r.status }}</td>
             <td><code>{{ r.password }}</code></td><td class="small">{{ r.message }}</td>
           </tr>
         {% empty %}<tr><td colspan="6" class="text-center text-secondary py-3">처리할 행이 없습니다.</td></tr>{% endfor %}

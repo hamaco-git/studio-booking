@@ -7,8 +7,8 @@
       <h1 class="h3 fw-bold text-center mb-4 pb-3 border-bottom text-nowrap">스튜디오 예약 관리 서비스</h1>
       {% if form.errors %}<div class="alert alert-danger">아이디 또는 비밀번호가 올바르지 않습니다.</div>{% endif %}
       <form method="post">{% csrf_token %}
-        <div class="mb-3"><label class="form-label" for="id_username">아이디 (학교 이메일)</label>
-          <input class="form-control" type="text" name="username" id="id_username" autofocus required></div>
+        <div class="mb-3"><label class="form-label" for="id_username">아이디</label>
+          <input class="form-control" type="text" name="username" id="id_username" autocapitalize="none" autocomplete="username" autofocus required></div>
         <div class="mb-3"><label class="form-label" for="id_password">비밀번호</label>
           <input class="form-control" type="password" name="password" id="id_password" required></div>
         <input type="hidden" name="next" value="{{ next }}">

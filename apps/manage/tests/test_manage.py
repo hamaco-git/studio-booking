@@ -73,9 +73,9 @@ class UserManageTest(StaffBase):
     def test_staff_creates_professor_with_temp_password(self):
         self.client.force_login(self.staff)
         res = self.client.post(reverse("manage:user_new"), {
-            "username": "Park@WCU.ac.kr", "name": "박교수", "phone": "", "role": "SUPER", "is_active": "on"},
+            "username": "Park", "name": "박교수", "phone": "", "role": "SUPER", "is_active": "on"},
             follow=True)
-        u = User.objects.get(username="park@wcu.ac.kr")
+        u = User.objects.get(username="park")
         self.assertEqual(u.role, User.Role.PROFESSOR)  # 담당자는 역할을 정할 수 없다
         self.assertTrue(u.must_change_password)
         self.assertContains(res, "임시 비밀번호 wcu-")
@@ -87,13 +87,19 @@ class UserManageTest(StaffBase):
     def test_super_can_create_staff(self):
         self.client.force_login(self.admin)
         self.client.post(reverse("manage:user_new"), {
-            "username": "staff9@wcu.ac.kr", "name": "담당9", "role": "STAFF", "is_active": "on"})
-        self.assertEqual(User.objects.get(username="staff9@wcu.ac.kr").role, User.Role.STAFF)
+            "username": "staff9", "name": "담당9", "role": "STAFF", "is_active": "on"})
+        self.assertEqual(User.objects.get(username="staff9").role, User.Role.STAFF)
 
     def test_duplicate_username(self):
         self.client.force_login(self.staff)
-        res = self.client.post(reverse("manage:user_new"), {"username": "KIM@wcu.ac.kr", "name": "중복"})
+        res = self.client.post(reverse("manage:user_new"), {"username": "KIM", "name": "중복"})
         self.assertContains(res, "이미 등록된 아이디")
+
+    def test_email_style_username_rejected(self):
+        self.client.force_login(self.staff)
+        res = self.client.post(reverse("manage:user_new"), {"username": "choi@wcu.ac.kr", "name": "최교수"})
+        self.assertContains(res, "@를 쓸 수 없습니다")
+        self.assertFalse(User.objects.filter(name="최교수").exists())
 
     def test_reset_password(self):
         self.client.force_login(self.staff)
@@ -150,9 +156,9 @@ class ImportTest(StaffBase):
         return self.client.post(reverse("manage:users_import"), data)
 
     def test_import_creates_and_assigns(self):
-        res = self.upload("이메일,이름,연락처,과목코드\nnew1@wcu.ac.kr,새교수1,,C1\nkim@wcu.ac.kr,,,C1\nbad,x,,\n")
+        res = self.upload("이메일,이름,연락처,과목코드\nnew1,새교수1,,C1\nkim,,,C1\nbad@wcu.ac.kr,x,,\n")
         self.assertContains(res, "새 계정 1개, 오류 1건")
-        u = User.objects.get(username="new1@wcu.ac.kr")
+        u = User.objects.get(username="new1")
         self.assertTrue(u.must_change_password)
         self.assertIn(u, self.course.professors.all())
         # 결과 CSV는 한 번만 내려받을 수 있다
@@ -164,37 +170,45 @@ class ImportTest(StaffBase):
         self.assertEqual(self.client.get(reverse("manage:users_import_result")).status_code, 302)
 
     def test_import_cp949_from_excel(self):
-        self.upload("이메일,이름\ncp@wcu.ac.kr,엑셀교수\n", encoding="cp949")
-        self.assertEqual(User.objects.get(username="cp@wcu.ac.kr").name, "엑셀교수")
+        self.upload("이메일,이름\ncp,엑셀교수\n", encoding="cp949")
+        self.assertEqual(User.objects.get(username="cp").name, "엑셀교수")
 
     def test_unknown_course_code_is_error(self):
-        res = self.upload("new2@wcu.ac.kr,새교수2,,NOPE\n")
+        res = self.upload("new2,새교수2,,NOPE\n")
         self.assertContains(res, "없는 과목코드")
-        self.assertFalse(User.objects.filter(username="new2@wcu.ac.kr").exists())
+        self.assertFalse(User.objects.filter(username="new2").exists())
 
     def test_import_phone_normalized_and_validated(self):
         res = self.upload("이메일,이름,휴대폰 번호,과목코드\n"
-                          "ph1@wcu.ac.kr,폰교수,01011112222,\n"
-                          "ph2@wcu.ac.kr,잘못된번호,02-123-4567,\n")
+                          "ph1,폰교수,01011112222,\n"
+                          "ph2,잘못된번호,02-123-4567,\n")
         self.assertContains(res, "새 계정 1개, 오류 1건")
-        self.assertEqual(User.objects.get(username="ph1@wcu.ac.kr").phone, "010-1111-2222")
-        self.assertFalse(User.objects.filter(username="ph2@wcu.ac.kr").exists())
+        self.assertEqual(User.objects.get(username="ph1").phone, "010-1111-2222")
+        self.assertFalse(User.objects.filter(username="ph2").exists())
         self.assertContains(res, "휴대폰 번호 형식")
 
     def test_import_updates_phone_of_existing_account(self):
-        self.upload("kim@wcu.ac.kr,,010 3333 4444,C1\n")
+        self.upload("kim,,010 3333 4444,C1\n")
         self.prof.refresh_from_db()
         self.assertEqual(self.prof.phone, "010-3333-4444")
         log = AuditLog.objects.filter(target_table="accounts_user", target_id=self.prof.pk).latest("created_at")
         self.assertEqual(log.after["phone"], "010-3333-4444")
 
     def test_import_old_header_still_works(self):
-        res = self.upload("이메일,이름,연락처,과목코드\nold@wcu.ac.kr,옛양식,,\n")
+        res = self.upload("이메일,이름,연락처,과목코드\nold,옛양식,,\n")
         self.assertContains(res, "새 계정 1개, 오류 0건")
 
     def test_template_download(self):
         res = self.client.get(reverse("manage:users_import_template"))
-        self.assertIn("이메일", res.content.decode("utf-8-sig"))
+        text = res.content.decode("utf-8-sig")
+        self.assertIn("아이디", text)
+        self.assertNotIn("@", text)
+
+    def test_import_rejects_email_style_id(self):
+        res = self.upload("아이디,이름\nnew3@wcu.ac.kr,메일교수\n")
+        self.assertContains(res, "새 계정 0개, 오류 1건")
+        self.assertContains(res, "@를 쓸 수 없습니다")
+        self.assertFalse(User.objects.filter(username__startswith="new3").exists())
 
     def test_temp_password_format(self):
         self.assertRegex(services.temp_password(), r"^wcu-\d{4}-[a-z]{4}$")

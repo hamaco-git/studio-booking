@@ -15,9 +15,9 @@ class DesignerBase(StaffBase):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        cls.designer = User.objects.create_user("d1@wcu.ac.kr", password="x", name="설계1",
+        cls.designer = User.objects.create_user("d1", password="x", name="설계1",
                                                 role=User.Role.DESIGNER, must_change_password=False)
-        cls.designer2 = User.objects.create_user("d2@wcu.ac.kr", password="x", name="설계2",
+        cls.designer2 = User.objects.create_user("d2", password="x", name="설계2",
                                                  role=User.Role.DESIGNER, must_change_password=False)
         cls.course.designer = cls.designer
         cls.course.save()
@@ -124,7 +124,7 @@ class SeedDesignersTest(DesignerBase):
         Semester.objects.update(is_current=True)
         c3 = Course.objects.create(semester=self.course.semester, code="C3", name="새과목", studio=self.s1)
         call_command("seed_designers", stdout=StringIO())
-        names = set(User.objects.filter(role=User.Role.DESIGNER, username__endswith="@demo.local")
+        names = set(User.objects.filter(role=User.Role.DESIGNER, username__startswith="designer")
                     .values_list("name", flat=True))
         self.assertEqual(names, {"교수설계자1", "교수설계자2", "교수설계자3"})
         c3.refresh_from_db()
@@ -132,6 +132,6 @@ class SeedDesignersTest(DesignerBase):
         self.course.refresh_from_db()
         self.assertEqual(self.course.designer, self.designer)  # 이미 배정된 과목은 그대로
         call_command("seed_designers", stdout=StringIO())
-        self.assertEqual(User.objects.filter(username__endswith="@demo.local").count(), 3)
-        u = User.objects.get(username="designer1@demo.local")
+        self.assertEqual(User.objects.filter(username__startswith="designer").count(), 3)
+        u = User.objects.get(username="designer1")
         self.assertTrue(u.check_password("demo1234!"))

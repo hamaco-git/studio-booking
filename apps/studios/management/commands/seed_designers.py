@@ -2,7 +2,7 @@
 
     uv run python manage.py seed_designers
 
-교수설계자1~3 (designer1~3@demo.local, 비밀번호 demo1234!)을 만들고,
+교수설계자1~3 (designer1~3, 비밀번호 demo1234!)을 만들고,
 현재 학기 과목 중 교수설계자가 아직 없는 과목에 돌아가며 배정한다.
 여러 번 실행해도 이미 있는 계정·배정은 바꾸지 않는다.
 """
@@ -19,10 +19,10 @@ PASSWORD = "demo1234!"
 def seed_designers():
     designers = []
     for i in range(1, 4):
-        login = f"designer{i}@demo.local"
+        login = f"designer{i}"
         u, created = User.objects.get_or_create(
             username=login,
-            defaults={"name": f"교수설계자{i}", "role": User.Role.DESIGNER, "email": login,
+            defaults={"name": f"교수설계자{i}", "role": User.Role.DESIGNER,
                       "must_change_password": False},
         )
         if created:
@@ -49,4 +49,4 @@ class Command(BaseCommand):
             raise CommandError("DEBUG=True(개발 환경)에서만 실행할 수 있습니다. "
                                "예: DEBUG=True uv run python manage.py seed_designers")
         _, assigned = seed_designers()
-        self.stdout.write(f"완료: 교수설계자1~3 (designer1~3@demo.local / {PASSWORD}), 과목 {assigned}개에 배정")
+        self.stdout.write(f"완료: 교수설계자1~3 (designer1~3 / {PASSWORD}), 과목 {assigned}개에 배정")

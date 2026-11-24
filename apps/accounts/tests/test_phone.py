@@ -23,6 +23,6 @@ class PhoneFormatTest(SimpleTestCase):
 
 class PhoneSaveTest(TestCase):
     def test_saved_normalized(self):
-        u = User.objects.create_user("p@wcu.ac.kr", password="x", name="교수", phone="01098765432")
+        u = User.objects.create_user("p", password="x", name="교수", phone="01098765432")
         u.refresh_from_db()
         self.assertEqual(u.phone, "010-9876-5432")

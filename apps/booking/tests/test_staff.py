@@ -16,14 +16,14 @@ class StaffBase(TestCase):
     def setUpTestData(cls):
         cls.s1 = Studio.objects.create(code="studio1", name="Studio 1")
         cls.s2 = Studio.objects.create(code="studio2", name="Studio 2")
-        cls.staff = User.objects.create_user("staff1@wcu.ac.kr", password="x", name="담당1",
+        cls.staff = User.objects.create_user("staff1", password="x", name="담당1",
                                              role=User.Role.STAFF, must_change_password=False)
         StudioStaff.objects.create(studio=cls.s1, staff=cls.staff)
-        cls.admin = User.objects.create_user("admin@wcu.ac.kr", password="x", name="관리자",
+        cls.admin = User.objects.create_user("admin", password="x", name="관리자",
                                              role=User.Role.SUPER, must_change_password=False)
-        cls.prof = User.objects.create_user("kim@wcu.ac.kr", password="x", name="김교수",
+        cls.prof = User.objects.create_user("kim", password="x", name="김교수",
                                             role=User.Role.PROFESSOR, must_change_password=False)
-        cls.other = User.objects.create_user("lee@wcu.ac.kr", password="x", name="이교수",
+        cls.other = User.objects.create_user("lee", password="x", name="이교수",
                                              role=User.Role.PROFESSOR, must_change_password=False)
         sem = Semester.objects.create(name="2027-1", start_date=date(2027, 3, 1), end_date=date(2027, 6, 30))
         cls.course = Course.objects.create(semester=sem, code="C1", name="영상제작", studio=cls.s1)

@@ -2,7 +2,7 @@
 
     uv run python manage.py seed_demo
 
-담당자 staff1~4@demo.local, 교수 prof1~6@demo.local, 교수설계자 designer1~3@demo.local
+담당자 staff1~4, 교수 prof1~6, 교수설계자 designer1~3
 (비밀번호 모두 demo1234!)과
 현재 학기·과목, 이번 주와 다음 주 슬롯, 예약 몇 건을 만든다.
 """
@@ -34,7 +34,7 @@ class Command(BaseCommand):
 
         def user(login, name, role):
             u, created = User.objects.get_or_create(
-                username=login, defaults={"name": name, "role": role, "email": login, "must_change_password": False}
+                username=login, defaults={"name": name, "role": role, "must_change_password": False}
             )
             if created:
                 u.set_password(PASSWORD)
@@ -42,8 +42,8 @@ class Command(BaseCommand):
             return u
 
         for i, s in enumerate(studios, 1):
-            StudioStaff.objects.get_or_create(studio=s, staff=user(f"staff{i}@demo.local", f"담당자{i}", User.Role.STAFF))
-        profs = [user(f"prof{i}@demo.local", f"교수{i}", User.Role.PROFESSOR) for i in range(1, 7)]
+            StudioStaff.objects.get_or_create(studio=s, staff=user(f"staff{i}", f"담당자{i}", User.Role.STAFF))
+        profs = [user(f"prof{i}", f"교수{i}", User.Role.PROFESSOR) for i in range(1, 7)]
 
         today = timezone.localdate()
         sem, _ = Semester.objects.get_or_create(
@@ -78,5 +78,5 @@ class Command(BaseCommand):
             if slot and not Reservation.objects.filter(professor=p).exists():
                 Reservation.objects.create(studio=c.studio, course=c, professor=p, slot=slot, date=slot.date,
                                            start_time=slot.start_time, end_time=slot.end_time)
-        self.stdout.write(f"완료: 슬롯 {made}개 추가. 담당자 staff1~4@demo.local, 교수 prof1~6@demo.local, "
-                          f"교수설계자 designer1~3@demo.local / 비밀번호 {PASSWORD}")
+        self.stdout.write(f"완료: 슬롯 {made}개 추가. 담당자 staff1~4, 교수 prof1~6, "
+                          f"교수설계자 designer1~3 / 비밀번호 {PASSWORD}")
