@@ -6,16 +6,18 @@ import secrets
 import string
 
 from django.core.exceptions import ValidationError
-from django.core.validators import validate_email
 from django.db import transaction
 
 from apps.accounts.models import User
 from apps.accounts.phone import normalize_phone, validate_phone
+from apps.accounts.validators import validate_login_id
 from apps.booking import audit
 from apps.booking.models import AuditLog
 from apps.studios.models import Course
 
-CSV_HEADERS = ["이메일", "이름", "휴대폰 번호", "과목코드"]
+CSV_HEADERS = ["아이디", "이름", "휴대폰 번호", "과목코드"]
+# 첫 행이 이 값으로 시작하면 머리글로 보고 건너뛴다 (예전 양식의 "이메일" 포함).
+HEADER_FIRST_CELLS = ("아이디", "id", "ID", "이메일", "email", "Email")
 
 
 def temp_password():
@@ -63,28 +65,28 @@ def decode_csv(raw: bytes) -> str:
 
 
 def import_professors(actor, text, semester=None):
-    """CSV(이메일,이름,휴대폰 번호,과목코드)로 교수 계정을 만들고 과목에 배정한다.
+    """CSV(아이디,이름,휴대폰 번호,과목코드)로 교수 계정을 만들고 과목에 배정한다.
 
     과목코드는 세미콜론(;)으로 여러 개. 이미 있는 계정은 새로 만들지 않고 과목 배정만 하며,
     휴대폰 번호 칸이 채워져 있으면 그 계정의 번호를 새 값으로 바꾼다.
-    돌려주는 값: 행마다 dict(row, email, name, status, password, message)
+    돌려주는 값: 행마다 dict(row, username, name, status, password, message)
     """
     reader = csv.reader(io.StringIO(text))
     rows = list(reader)
-    if rows and rows[0] and rows[0][0].strip().lstrip("\ufeff") in ("이메일", "email", "Email"):
+    if rows and rows[0] and rows[0][0].strip().lstrip("\ufeff") in HEADER_FIRST_CELLS:
         rows = rows[1:]
     results = []
     for i, cols in enumerate(rows, start=2):
         cols = [c.strip() for c in cols] + [""] * 4
-        email, name, phone, codes = cols[0].lower(), cols[1], cols[2], cols[3]
+        username, name, phone, codes = cols[0].lower(), cols[1], cols[2], cols[3]
         if not any(cols[:4]):
             continue
-        res = {"row": i, "email": email, "name": name, "status": "", "password": "", "message": ""}
+        res = {"row": i, "username": username, "name": name, "status": "", "password": "", "message": ""}
         results.append(res)
         try:
-            validate_email(email)
-        except ValidationError:
-            res.update(status="오류", message="이메일 형식이 올바르지 않습니다.")
+            validate_login_id(username)
+        except ValidationError as e:
+            res.update(status="오류", message=e.messages[0])
             continue
         try:
             validate_phone(phone)
@@ -105,7 +107,7 @@ def import_professors(actor, text, semester=None):
                 continue
             courses = [found[c] for c in code_list]
         with transaction.atomic():
-            user = User.objects.filter(username__iexact=email).first()
+            user = User.objects.filter(username__iexact=username).first()
             if user:
                 if user.role != User.Role.PROFESSOR:
                     res.update(status="오류", message="교수가 아닌 계정입니다.")
@@ -122,7 +124,7 @@ def import_professors(actor, text, semester=None):
                 if not name:
                     res.update(status="오류", message="이름이 비어 있습니다.")
                     continue
-                user = User(username=email, email=email, name=name, phone=phone, role=User.Role.PROFESSOR)
+                user = User(username=username, name=name, phone=phone, role=User.Role.PROFESSOR)
                 res["password"] = create_user(actor, user)
                 res["status"] = "생성"
             for c in courses:

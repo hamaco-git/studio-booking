@@ -240,7 +240,7 @@ def _csv_response(name, rows):
 def users_import_template(request):
     return _csv_response("professors_template.csv", [
         services.CSV_HEADERS,
-        ["hong@example.ac.kr", "홍길동", "010-0000-0000", "C101;C102"],
+        ["hong", "홍길동", "010-0000-0000", "C101;C102"],
     ])
 
 
@@ -250,8 +250,8 @@ def users_import_result(request):
     if not results:
         messages.info(request, "내려받을 결과가 없습니다. (결과는 한 번만 내려받을 수 있습니다)")
         return redirect("manage:users_import")
-    return _csv_response("import_result.csv", [["행", "이메일", "이름", "결과", "임시 비밀번호", "비고"]] + [
-        [r["row"], r["email"], r["name"], r["status"], r["password"], r["message"]] for r in results
+    return _csv_response("import_result.csv", [["행", "아이디", "이름", "결과", "임시 비밀번호", "비고"]] + [
+        [r["row"], r["username"], r["name"], r["status"], r["password"], r["message"]] for r in results
     ])
 
 

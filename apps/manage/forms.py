@@ -1,8 +1,8 @@
 from django import forms
-from django.core.validators import validate_email
 
 from apps.accounts.models import User
 from apps.accounts.phone import normalize_phone
+from apps.accounts.validators import validate_login_id
 from apps.studios.models import Course, Semester
 
 INPUT = {"class": "form-control"}
@@ -63,9 +63,9 @@ class UserForm(forms.ModelForm):
     class Meta:
         model = User
         fields = ["username", "name", "phone", "role", "is_active"]
-        labels = {"username": "아이디 (학교 이메일)", "is_active": "사용 중"}
+        labels = {"username": "아이디", "is_active": "사용 중"}
         widgets = {
-            "username": forms.EmailInput(attrs=INPUT),
+            "username": forms.TextInput(attrs={**INPUT, "placeholder": "예: prof01", "autocapitalize": "none"}),
             "name": forms.TextInput(attrs=INPUT),
             "phone": forms.TextInput(attrs={**INPUT, "type": "tel", "placeholder": "010-1234-5678", "inputmode": "tel"}),
             "role": forms.Select(attrs=SELECT),
@@ -74,7 +74,7 @@ class UserForm(forms.ModelForm):
 
     def __init__(self, *args, actor, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["username"].help_text = ""
+        self.fields["username"].help_text = "영문, 숫자와 . _ - 만 쓸 수 있습니다 (@ 불가)."
         if not actor.is_super_admin:
             # 담당자는 교수 계정만 만들고 고칠 수 있다.
             del self.fields["role"]
@@ -85,7 +85,7 @@ class UserForm(forms.ModelForm):
 
     def clean_username(self):
         value = self.cleaned_data["username"].strip().lower()
-        validate_email(value)
+        validate_login_id(value)
         if User.objects.filter(username__iexact=value).exclude(pk=self.instance.pk).exists():
             raise forms.ValidationError("이미 등록된 아이디입니다.")
         return value
@@ -95,7 +95,6 @@ class UserForm(forms.ModelForm):
 
     def save(self, commit=True):
         user = super().save(commit=False)
-        user.email = user.username
         if commit:
             user.save()
         return user
