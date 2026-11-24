@@ -74,7 +74,7 @@ sudo certbot --nginx -d studio.example.ac.kr
    #   SMS_MODE=test
    #   ALIGO_API_KEY=...
    #   ALIGO_USER_ID=...
-   #   ALIGO_SENDER=02-xxxx-xxxx      # 알리고에 등록된 발신번호
+   #   ALIGO_SENDER=1577-4990         # 알리고에 등록된 발신번호
    #   SMS_CONTACT=스튜디오 담당자 02-xxxx-xxxx   # 선택
    sudo chmod 600 /srv/studio-booking/.env
    sudo systemctl restart studio-booking

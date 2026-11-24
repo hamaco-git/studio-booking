@@ -18,7 +18,7 @@ from apps.notify.models import SmsLog
 
 KST = ZoneInfo("Asia/Seoul")
 TODAY = timezone.localdate()
-ALIGO = dict(ALIGO_API_KEY="k", ALIGO_USER_ID="u", ALIGO_SENDER="02-000-0000")
+ALIGO = dict(ALIGO_API_KEY="k", ALIGO_USER_ID="u", ALIGO_SENDER="1577-4990")
 
 
 def at_9am(d):
@@ -205,6 +205,7 @@ class AligoTest(SmsBase):
         self.assertEqual((sent["testmode_yn"], sent["msg_type"], sent["receiver"], sent["key"]),
                          ("Y", "LMS", "01012345678", "k"))
         self.assertIn("title", sent)
+        self.assertEqual(sent["sender"], "15774990")
         self.assertEqual((log.status, log.msg_id, log.mode), ("SENT", "123", "test"))
 
     def test_failure_is_recorded_and_retry_allowed(self):

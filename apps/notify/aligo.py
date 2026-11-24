@@ -58,7 +58,7 @@ def send(receiver, text, title="", testmode=False, timeout=10):
     data = {
         "key": settings.ALIGO_API_KEY,
         "user_id": settings.ALIGO_USER_ID,
-        "sender": settings.ALIGO_SENDER,
+        "sender": "".join(c for c in settings.ALIGO_SENDER if c.isdigit()),
         "receiver": receiver,
         "msg": text,
         "msg_type": msg_type,
