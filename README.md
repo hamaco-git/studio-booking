@@ -18,7 +18,8 @@
 | 4 | 담당자 기능 (현황 달력, 주간 슬롯 설정, 촬영 불가일, 예약 수정·취소) | 완료 |
 | 5 | 교수 예약 기능 (예약 달력, 신청·취소), 담당자 대리 예약 | 완료 |
 | 6 | 관리 화면 (학기, 과목·교수 배정, 계정, 교수 CSV 일괄 등록, 작업 이력), 예약 엑셀 내려받기 | 완료 |
-| 6+ | 노쇼·취소 기록, 작업 이력 개선, 교수 휴대폰 번호 | 진행 중 |
+| 6+ | 노쇼·취소 기록, 작업 이력 개선, 교수 휴대폰 번호 | 완료 |
+| 6++ | 교수 알림 문자 (알리고: 예약 확정·2일 전·당일) | 진행 중 |
 | 7 | 사용자 테스트 | 예정 |
 | 8 | Ubuntu 서버 배포 | 예정 |
 
@@ -149,7 +150,22 @@ uv run python manage.py seed_demo
 "전체 스튜디오" 불가일은 슈퍼관리자만 등록할 수 있습니다.
 오전/오후 시간대는 슈퍼관리자가 관리자 화면의 "시간대 템플릿"에서 바꿀 수 있습니다.
 
-### 7. 테스트
+### 7. 알림 문자 시험 (선택)
+
+예약이 확정되면 바로, 촬영 2일 전과 당일 오전 9시에 교수에게 문자가 갑니다(알리고).
+Mac에서는 `.env`에 `SMS_MODE=console`을 넣으면 실제로 보내지 않고 기록만 남깁니다.
+예약 상세 화면 오른쪽 "문자 발송 기록"과 터미널에서 문자 내용을 볼 수 있습니다.
+
+```bash
+uv run python manage.py send_sms_reminders --dry-run              # 오늘 보낼 2일 전·당일 알림 미리 보기
+uv run python manage.py send_sms_reminders --dry-run --date 2027-03-08
+```
+
+알리고 키를 넣고 `SMS_MODE=test`로 바꾸면 알리고 테스트 모드(실제 발송·과금 없음)로 설정을 확인할 수 있습니다.
+알리고는 등록된 IP에서만 호출을 받으므로 Mac의 공인 IP도 알리고에 등록해야 합니다.
+자세한 서버 설정은 [docs/deploy-ubuntu.md](docs/deploy-ubuntu.md)의 6장을 보세요.
+
+### 8. 테스트
 
 ```bash
 uv run python manage.py test
@@ -162,6 +178,7 @@ config/            Django 설정 (settings.py는 .env 값을 읽음)
 apps/accounts/     계정·역할·로그인
 apps/studios/      스튜디오, 담당자 배정, 학기, 과목, 과목 담당 교수
 apps/booking/      예약 가능 슬롯, 촬영 불가일, 예약, 노쇼·취소 기록, 작업 이력
+apps/notify/       교수 알림 문자 (알리고 연동, 문자 문구, 발송 기록)
 templates/         화면 템플릿 (Bootstrap 5)
 static/vendor/     Bootstrap, FullCalendar 파일 (인터넷 CDN 없이 동작하도록 저장소에 포함)
 docs/              설계·배포 문서
@@ -182,6 +199,7 @@ docs/              설계·배포 문서
 | booking_blackout | 촬영 불가일 (스튜디오 비우면 전체, 시간 비우면 종일) |
 | booking_reservation | 예약 (삭제 대신 상태를 '취소'로 변경) |
 | booking_auditlog | 작업 이력 |
+| notify_smslog | 문자 발송 기록 (중복 발송 방지) |
 
 같은 스튜디오에서 시간이 겹치는 확정 예약과 겹치는 슬롯은 PostgreSQL 제약으로 막혀 있어,
 두 사람이 동시에 같은 시간을 눌러도 하나만 저장됩니다.

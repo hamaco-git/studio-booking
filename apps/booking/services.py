@@ -194,6 +194,9 @@ def book_slot(actor, professor, course, slot, memo=""):
     except IntegrityError:
         raise ValidationError("방금 다른 분이 먼저 예약했습니다. 다른 시간을 선택해 주세요.")
     audit.log(actor, AuditLog.Action.CREATE, r, after=audit.snapshot(r))
+    from apps.notify.services import notify_on_commit
+
+    notify_on_commit(r, "CONFIRMED")  # 교수에게 예약 확정 문자
     return r
 
 
