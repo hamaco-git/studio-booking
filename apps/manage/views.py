@@ -23,7 +23,7 @@ from apps.booking.permissions import editable_studios, staff_required
 from apps.studios.models import Course, Semester
 
 from . import services
-from .forms import CourseForm, ImportForm, UserForm
+from .forms import CourseForm, CourseImportForm, ImportForm, UserForm
 
 # ── 학기 ──────────────────────────────────────────────────
 
@@ -252,6 +252,73 @@ def users_import_result(request):
         return redirect("manage:users_import")
     return _csv_response("import_result.csv", [["행", "아이디", "이름", "결과", "임시 비밀번호", "비고"]] + [
         [r["row"], r["username"], r["name"], r["status"], r["password"], r["message"]] for r in results
+    ])
+
+
+@staff_required
+def courses_import(request):
+    """과목 CSV 일괄 등록: 올리면 먼저 미리보기, '등록하기'를 눌러야 저장한다."""
+    form = CourseImportForm(request.POST or None, request.FILES or None)
+    results, applied = None, False
+    if request.method == "POST" and request.POST.get("step") == "apply":
+        saved = request.session.pop("course_import", None)
+        if not saved:
+            messages.info(request, "미리보기가 만료되었습니다. 파일을 다시 올려 주세요.")
+            return redirect("manage:courses_import")
+        semester = Semester.objects.filter(pk=saved["semester"]).first() if saved["semester"] else None
+        results = services.parse_courses(request.user, saved["text"], semester)
+        n = services.apply_courses(request.user, results)
+        errors = sum(r["status"] == "오류" for r in results)
+        messages.success(request, f"과목 {n}개를 저장했습니다." + (f" 오류 {errors}건은 건너뛰었습니다." if errors else ""))
+        applied = True
+        form = CourseImportForm()
+    elif request.method == "POST" and form.is_valid():
+        f = form.cleaned_data["file"]
+        if f.size > 1024 * 1024:
+            form.add_error("file", "1MB 이하 파일만 올릴 수 있습니다.")
+        else:
+            try:
+                text = services.decode_csv(f.read())
+            except ValidationError as e:
+                form.add_error("file", e.messages[0])
+            else:
+                semester = form.cleaned_data["semester"]
+                results = services.parse_courses(request.user, text, semester)
+                request.session["course_import"] = {"text": text, "semester": semester.pk if semester else None}
+    counts = {}
+    for r in results or []:
+        counts[r["status"]] = counts.get(r["status"], 0) + 1
+    return render(request, "manage/courses_import.html", {
+        "form": form, "results": results, "applied": applied, "counts": counts,
+        "can_apply": bool(counts.get("신규") or counts.get("갱신")),
+        "headers": services.COURSE_CSV_HEADERS,
+    })
+
+
+@staff_required
+def courses_import_template(request):
+    from apps.studios.models import Studio
+
+    sem = Semester.objects.filter(is_current=True).first() or Semester.objects.first()
+    sem_name = sem.name if sem else "2027-1"
+    studio = editable_studios(request.user).first() or Studio.objects.first()
+    code = studio.code if studio else "studio1"
+    return _csv_response("courses_template.csv", [
+        services.COURSE_CSV_HEADERS,
+        [sem_name, "C101", "영상제작론", code, "prof01;prof02", "designer01", "사용"],
+        [sem_name, "C102", "디지털미디어", code, "prof03", "", ""],
+    ])
+
+
+@staff_required
+def courses_export(request):
+    """선택한 학기의 과목을 일괄 등록 양식 그대로 내려받는다 (수정 후 다시 올리기용)."""
+    semester = _default_semester(request)
+    qs = Course.objects.filter(semester=semester).select_related("studio", "designer") \
+        .prefetch_related("professors").order_by("studio__code", "code")
+    return _csv_response(f"courses_{semester.name if semester else ''}.csv", [services.COURSE_CSV_HEADERS] + [
+        [c.semester.name, c.code, c.name, c.studio.code, ";".join(p.username for p in c.professors.all()),
+         c.designer.username if c.designer else "", "사용" if c.is_active else "중지"] for c in qs
     ])
 
 

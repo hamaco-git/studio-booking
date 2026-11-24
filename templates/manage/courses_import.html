@@ -1,0 +1,62 @@
+{% extends "manage/_base.html" %}
+{% block title %}과목 일괄 등록 · 관리{% endblock %}
+{% block manage %}
+<div class="row g-4">
+  <div class="col-lg-4"><div class="card shadow-sm"><div class="card-body">
+    <h2 class="h6 mb-3">CSV 파일로 과목 등록·수정하기</h2>
+    <ol class="small ps-3">
+      <li><a href="{% url 'manage:courses_import_template' %}">양식(CSV) 내려받기</a> 후 엑셀에서 작성합니다. 이미 등록된 과목을 고치려면 <a href="{% url 'manage:courses' %}">과목·교수 배정</a> 화면의 "CSV 내려받기"로 받은 파일을 고쳐 올려도 됩니다.</li>
+      <li>열 순서: {{ headers|join:", " }}.</li>
+      <li>스튜디오는 코드(예: studio1)나 이름(예: Studio 1)으로 적습니다. 담당 교수가 여러 명이면 아이디를 세미콜론(;)으로 구분합니다.</li>
+      <li>같은 학기에 같은 과목코드가 있으면 그 과목을 고칩니다. 이때 빈 칸은 기존 값을 그대로 두고, 담당 교수·교수설계자 칸에 <code>-</code>를 쓰면 배정을 지웁니다.</li>
+      <li>사용 여부는 "사용" 또는 "중지"로 적고, 비우면 새 과목은 "사용"입니다.</li>
+      <li>교수·교수설계자 계정이 먼저 있어야 합니다. 새 교수는 <a href="{% url 'manage:users_import' %}">교수 일괄 등록</a>에서 과목코드 칸을 비우고 먼저 만들어 주세요.</li>
+      <li>올리면 먼저 <strong>미리보기</strong>가 나오고, "등록하기"를 눌러야 저장됩니다.</li>
+    </ol>
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}
+      <input type="hidden" name="step" value="preview">
+      <div class="mb-3"><label class="form-label" for="{{ form.file.id_for_label }}">CSV 파일</label>{{ form.file }}
+        {% for e in form.file.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}</div>
+      <div class="mb-3"><label class="form-label" for="{{ form.semester.id_for_label }}">{{ form.semester.label }}</label>{{ form.semester }}</div>
+      <button class="btn btn-primary w-100">미리보기</button>
+    </form>
+    {% if not request.user.is_super_admin %}<p class="text-secondary small mt-3 mb-0">담당자는 담당 스튜디오의 과목만 등록·수정할 수 있습니다.</p>{% endif %}
+  </div></div></div>
+  <div class="col-lg-8">
+    {% if results is not None %}
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+      <h2 class="h6 m-0 me-auto">{% if applied %}처리 결과{% else %}미리보기 (아직 저장되지 않았습니다){% endif %}</h2>
+      {% for k, v in counts.items %}<span class="badge {% if k == '오류' %}text-bg-danger{% elif k == '신규' %}text-bg-primary{% elif k == '갱신' %}text-bg-success{% else %}text-bg-secondary{% endif %}">{{ k }} {{ v }}</span>{% endfor %}
+    </div>
+    {% if not applied %}
+      {% if can_apply %}
+      <form method="post" class="d-flex flex-wrap align-items-center gap-2 mb-3">{% csrf_token %}
+        <input type="hidden" name="step" value="apply">
+        <button class="btn btn-success">등록하기</button>
+        <span class="small text-secondary">신규·갱신 행만 저장합니다.{% if counts.오류 %} 오류 행은 건너뜁니다. 고친 뒤 파일을 다시 올려도 됩니다.{% endif %}</span>
+      </form>
+      {% elif results %}
+      <div class="alert alert-secondary small">저장할 행이 없습니다. 오류를 고친 뒤 다시 올려 주세요.</div>
+      {% endif %}
+    {% else %}
+      <p class="small"><a href="{% url 'manage:courses' %}">과목·교수 배정 화면에서 확인하기</a></p>
+    {% endif %}
+    <div class="card shadow-sm"><div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead class="table-light text-nowrap"><tr><th>행</th><th>결과</th><th>학기</th><th>과목코드</th><th>과목명</th><th>스튜디오</th><th>담당 교수</th><th>교수설계자</th><th>사용</th><th>비고</th></tr></thead>
+        <tbody>
+        {% for r in results %}
+          <tr{% if r.status == '오류' %} class="table-danger"{% elif r.status == '변경 없음' %} class="text-secondary"{% endif %}>
+            <td>{{ r.row }}</td><td class="text-nowrap">{{ r.status }}</td><td class="text-nowrap">{{ r.semester }}</td>
+            <td>{{ r.code }}</td><td>{{ r.name }}</td><td class="text-nowrap">{{ r.studio }}</td>
+            <td>{{ r.professors }}</td><td>{{ r.designer }}</td><td class="text-nowrap">{{ r.active }}</td>
+            <td class="small">{{ r.message }}</td>
+          </tr>
+        {% empty %}<tr><td colspan="10" class="text-center text-secondary py-3">처리할 행이 없습니다.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div></div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
