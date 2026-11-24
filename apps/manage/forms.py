@@ -18,12 +18,13 @@ class CourseForm(forms.ModelForm):
 
     class Meta:
         model = Course
-        fields = ["semester", "code", "name", "studio", "professors", "is_active"]
+        fields = ["semester", "code", "name", "studio", "professors", "designer", "is_active"]
         widgets = {
             "semester": forms.Select(attrs=SELECT),
             "code": forms.TextInput(attrs=INPUT),
             "name": forms.TextInput(attrs=INPUT),
             "studio": forms.Select(attrs=SELECT),
+            "designer": forms.Select(attrs=SELECT),
             "is_active": forms.CheckboxInput(attrs={"class": "form-check-input"}),
         }
 
@@ -31,6 +32,12 @@ class CourseForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["studio"].queryset = studios
         self.fields["professors"].queryset = User.objects.filter(role=User.Role.PROFESSOR, is_active=True)
+        designers = User.objects.filter(role=User.Role.DESIGNER, is_active=True)
+        if self.instance.designer_id:
+            # 사용 중지된 교수설계자가 배정돼 있어도 수정 화면에서 값이 사라지지 않게
+            designers = designers | User.objects.filter(pk=self.instance.designer_id)
+        self.fields["designer"].queryset = designers.order_by("name")
+        self.fields["designer"].empty_label = "(미배정)"
         if self.instance.pk:
             self.initial["professors"] = list(self.instance.professors.values_list("pk", flat=True))
 

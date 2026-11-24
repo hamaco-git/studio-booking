@@ -89,13 +89,14 @@ def _default_semester(request):
 @staff_required
 def courses(request):
     semester = _default_semester(request)
-    qs = Course.objects.filter(semester=semester).select_related("studio").prefetch_related("professors")
+    qs = Course.objects.filter(semester=semester).select_related("studio", "designer").prefetch_related("professors")
     sid = request.GET.get("studio")
     if sid and sid.isdigit():
         qs = qs.filter(studio_id=sid)
     q = (request.GET.get("q") or "").strip()
     if q:
-        qs = qs.filter(Q(name__icontains=q) | Q(code__icontains=q) | Q(professors__name__icontains=q)).distinct()
+        qs = qs.filter(Q(name__icontains=q) | Q(code__icontains=q) | Q(professors__name__icontains=q)
+                       | Q(designer__name__icontains=q)).distinct()
     editable_ids = set(editable_studios(request.user).values_list("pk", flat=True))
     from apps.studios.models import Studio
 

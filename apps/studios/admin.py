@@ -27,7 +27,7 @@ class CourseProfessorInline(admin.TabularInline):
 
 @admin.register(Course)
 class CourseAdmin(admin.ModelAdmin):
-    list_display = ("name", "code", "semester", "studio", "is_active")
-    list_filter = ("semester", "studio", "is_active")
+    list_display = ("name", "code", "semester", "studio", "designer", "is_active")
+    list_filter = ("semester", "studio", "designer", "is_active")
     search_fields = ("name", "code")
     inlines = [CourseProfessorInline]

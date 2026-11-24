@@ -76,7 +76,7 @@ class Semester(models.Model):
 
 
 class Course(models.Model):
-    """과목. 과목마다 지정 스튜디오가 하나 있다."""
+    """과목. 과목마다 지정 스튜디오가 하나 있고, 담당 교수설계자를 한 명 배정할 수 있다."""
 
     semester = models.ForeignKey(Semester, on_delete=models.PROTECT, verbose_name="학기")
     code = models.CharField("과목 코드", max_length=30)
@@ -88,6 +88,15 @@ class Course(models.Model):
         related_name="courses",
         verbose_name="담당 교수",
         blank=True,
+    )
+    designer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="designed_courses",
+        limit_choices_to={"role": "DESIGNER"},
+        verbose_name="담당 교수설계자",
     )
     is_active = models.BooleanField("사용 중", default=True)
 

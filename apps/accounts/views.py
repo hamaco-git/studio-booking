@@ -19,10 +19,10 @@ class PasswordChangeView(auth_views.PasswordChangeView):
 
 @login_required
 def home(request):
-    """역할별 첫 화면: 담당자·관리자는 현황 달력, 교수는 촬영 예약."""
+    """역할별 첫 화면: 담당자·관리자·교수설계자는 현황 달력, 교수는 촬영 예약."""
     if request.user.must_change_password:
         return redirect("password_change")
-    if request.user.is_studio_staff or request.user.is_super_admin:
+    if request.user.is_studio_staff or request.user.is_super_admin or request.user.is_designer:
         return redirect("booking:calendar")
     return redirect("booking:book")
 

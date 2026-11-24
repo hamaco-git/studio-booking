@@ -13,7 +13,7 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractUser):
-    """모든 계정(슈퍼관리자, 스튜디오 담당자, 교수).
+    """모든 계정(슈퍼관리자, 스튜디오 담당자, 교수설계자, 교수).
 
     로그인 ID는 username 필드를 쓰며 학교 이메일을 넣는다.
     비밀번호는 Django가 암호화(PBKDF2)해서 저장한다.
@@ -22,6 +22,7 @@ class User(AbstractUser):
     class Role(models.TextChoices):
         SUPER = "SUPER", "슈퍼관리자"
         STAFF = "STAFF", "스튜디오 담당자"
+        DESIGNER = "DESIGNER", "교수설계자"
         PROFESSOR = "PROFESSOR", "교수"
 
     name = models.CharField("이름", max_length=50)
@@ -59,6 +60,10 @@ class User(AbstractUser):
     @property
     def is_studio_staff(self):
         return self.role == self.Role.STAFF
+
+    @property
+    def is_designer(self):
+        return self.role == self.Role.DESIGNER
 
     @property
     def is_professor(self):
