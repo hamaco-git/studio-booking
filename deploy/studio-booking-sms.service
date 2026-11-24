@@ -1,0 +1,13 @@
+# /etc/systemd/system/studio-booking-sms.service
+# 촬영 2일 전·당일 알림 문자 발송 (studio-booking-sms.timer가 매일 09:00에 실행)
+[Unit]
+Description=Studio booking SMS reminders
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=studio
+Group=www-data
+WorkingDirectory=/srv/studio-booking
+ExecStart=/srv/studio-booking/.venv/bin/python manage.py send_sms_reminders
