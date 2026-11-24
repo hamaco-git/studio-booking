@@ -64,6 +64,13 @@
       {% for h, change in history %}<li class="list-group-item">{{ h.created_at|date:"Y-m-d H:i" }} · {{ h.user.name|default:"-" }} · <strong>{{ h.get_action_display }}</strong>{% if change %}<div class="text-secondary text-break">{{ change }}</div>{% endif %}</li>
       {% empty %}<li class="list-group-item text-secondary">이력이 없습니다.</li>{% endfor %}
     </ul>
+    <h2 class="h6 mt-4">문자 발송 기록</h2>
+    <ul class="list-group small">
+      {% for s in sms_logs %}<li class="list-group-item">{{ s.created_at|date:"Y-m-d H:i" }} · {{ s.get_kind_display }} · {{ s.receiver|default:"번호 없음" }} ·
+        <strong class="{% if s.status == 'SENT' %}text-success{% elif s.status == 'FAILED' %}text-danger{% else %}text-secondary{% endif %}">{{ s.get_status_display }}</strong>{% if s.mode != 'live' %} <span class="badge text-bg-light">{{ s.get_mode_display }}</span>{% endif %}
+        {% if s.status != 'SENT' and s.result_message %}<div class="text-secondary text-break">{{ s.result_message }}</div>{% endif %}</li>
+      {% empty %}<li class="list-group-item text-secondary">보낸 문자가 없습니다.</li>{% endfor %}
+    </ul>
   </div>
 </div>
 {% endblock %}

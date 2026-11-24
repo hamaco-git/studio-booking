@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "apps.studios",
     "apps.booking",
     "apps.manage",
+    "apps.notify",
 ]
 
 MIDDLEWARE = [
@@ -124,6 +125,18 @@ MESSAGE_TAGS = {message_constants.ERROR: "danger"}
 # 교수 본인 예약 취소 마감: 촬영일 N일 전까지 (그 이후는 담당자에게 요청)
 PROFESSOR_CANCEL_DAYS_BEFORE = env.int("PROFESSOR_CANCEL_DAYS_BEFORE", default=2)
 
+# ── 교수 알림 문자 (알리고) ──
+# SMS_MODE: off(기본, 안 보냄) / console(기록만) / test(알리고 테스트 모드) / live(실제 발송)
+SMS_MODE = env.str("SMS_MODE", default="off").strip().lower()
+if SMS_MODE not in ("off", "console", "test", "live"):
+    raise ValueError("SMS_MODE는 off, console, test, live 중 하나여야 합니다.")
+# 키·아이디·발신번호는 .env 에만 적는다 (Git에 올리지 않음)
+ALIGO_API_KEY = env.str("ALIGO_API_KEY", default="")
+ALIGO_USER_ID = env.str("ALIGO_USER_ID", default="")
+ALIGO_SENDER = env.str("ALIGO_SENDER", default="")  # 알리고에 등록된 발신번호
+SMS_ORG_NAME = env.str("SMS_ORG_NAME", default="세계사이버대학")  # 문자 머리말 [세계사이버대학]
+SMS_CONTACT = env.str("SMS_CONTACT", default="")  # 문자 끝 "문의: ..." (비우면 생략)
+
 # 허용되지 않은 주소로 접속하면(400 Bad Request) DEBUG와 관계없이 콘솔에
 # 어떤 주소가 막혔는지 표시한다. → 그 주소를 .env의 ALLOWED_HOSTS에 추가
 LOGGING = {
@@ -136,5 +149,6 @@ LOGGING = {
             "level": "WARNING",
             "propagate": False,
         },
+        "apps.notify": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }

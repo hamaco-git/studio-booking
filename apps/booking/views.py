@@ -12,6 +12,8 @@ from django.utils.dateparse import parse_date
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
+from apps.notify.services import current_mode as sms_mode
+from apps.notify.services import notify_on_commit
 from apps.studios.models import CourseProfessor
 
 from . import audit, services
@@ -364,8 +366,14 @@ def reservation_edit(request, pk):
         except IntegrityError:
             form.add_error(None, "이미 예약된 시간입니다.")
         else:
-            audit.log(request.user, AuditLog.Action.UPDATE, r, before=before, after=audit.snapshot(r))
-            messages.success(request, "예약을 수정했습니다.")
+            after = audit.snapshot(r)
+            audit.log(request.user, AuditLog.Action.UPDATE, r, before=before, after=after)
+            msg = "예약을 수정했습니다."
+            if any(before.get(k) != after.get(k) for k in ("studio", "date", "start_time", "end_time")):
+                notify_on_commit(r, "CHANGED")  # 일정이 바뀌면 교수에게 변경 안내 문자
+                if sms_mode() != "off":
+                    msg += " 교수님께 변경 안내 문자도 발송합니다."
+            messages.success(request, msg)
             return redirect("booking:reservations")
     display = audit._Display()
     history = [
@@ -374,6 +382,7 @@ def reservation_edit(request, pk):
     ]
     return render(request, "booking/reservation_edit.html", {
         "form": form, "r": r, "history": history, "can_mark": r.can_mark_attendance(),
+        "sms_logs": r.sms_logs.all()[:20],
     })
 
 
@@ -387,6 +396,7 @@ def reservation_cancel(request, pk):
     except ValidationError as e:
         messages.info(request, " ".join(e.messages))
     else:
+        notify_on_commit(r, "CANCELLED", reason=r.cancel_reason)  # 담당자가 취소하면 교수에게 안내 문자
         messages.success(request, f"{r.date:%m/%d} {r.start_time:%H:%M} 예약을 취소했습니다.")
     return _back(request, "booking:reservations")
 

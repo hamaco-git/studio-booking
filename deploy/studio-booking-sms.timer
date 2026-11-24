@@ -1,0 +1,12 @@
+# /etc/systemd/system/studio-booking-sms.timer
+# 매일 한국 시간 오전 9시. 서버가 그 시각에 꺼져 있었으면 켜진 뒤 바로 실행
+# (단, 08~21시 밖이면 명령이 스스로 발송하지 않음)
+[Unit]
+Description=Daily 09:00 KST studio booking SMS reminders
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 Asia/Seoul
+Persistent=true
+
+[Install]
+WantedBy=timers.target
