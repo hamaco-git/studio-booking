@@ -81,7 +81,8 @@ def import_professors(actor, text, semester=None):
         username, name, phone, codes = cols[0].lower(), cols[1], cols[2], cols[3]
         if not any(cols[:4]):
             continue
-        res = {"row": i, "username": username, "name": name, "status": "", "password": "", "message": ""}
+        res = {"row": i, "username": username, "name": name, "status": "", "password": "", "message": "",
+               "warning": False}
         results.append(res)
         try:
             validate_login_id(username)
@@ -94,18 +95,19 @@ def import_professors(actor, text, semester=None):
             res.update(status="오류", message=e.messages[0])
             continue
         phone = normalize_phone(phone)
-        code_list = [c.strip() for c in codes.split(";") if c.strip()]
-        courses = []
+        code_list = list(dict.fromkeys(c.strip() for c in codes.replace(",", ";").split(";") if c.strip()))
+        courses, warnings = [], []
         if code_list:
             if not semester:
-                res.update(status="오류", message="과목코드가 있으면 기준 학기를 선택해야 합니다.")
-                continue
-            found = {c.code: c for c in Course.objects.filter(semester=semester, code__in=code_list)}
-            missing = [c for c in code_list if c not in found]
-            if missing:
-                res.update(status="오류", message=f"{semester} 학기에 없는 과목코드: {', '.join(missing)}")
-                continue
-            courses = [found[c] for c in code_list]
+                warnings.append("기준 학기를 고르지 않아 과목 배정은 건너뜀")
+            else:
+                found = {c.code: c for c in Course.objects.filter(semester=semester, code__in=code_list)}
+                missing = [c for c in code_list if c not in found]
+                if missing:
+                    # 과목이 아직 없어도 계정은 만든다. 나중에 과목 CSV의 담당 교수 칸에 이 아이디가 있으면 배정된다.
+                    warnings.append(f"{semester} 학기에 아직 없는 과목코드라 배정 건너뜀: {', '.join(missing)} "
+                                    "(과목 일괄 등록에서 담당 교수 아이디로 이 아이디를 넣으면 배정됩니다)")
+                courses = [found[c] for c in code_list if c in found]
         with transaction.atomic():
             user = User.objects.filter(username__iexact=username).first()
             if user:
@@ -129,9 +131,12 @@ def import_professors(actor, text, semester=None):
                 res["status"] = "생성"
             for c in courses:
                 c.professors.add(user)
+            notes = [res["message"]] if res["message"] else []
             if courses:
-                note = "배정: " + ", ".join(c.name for c in courses)
-                res["message"] = f"{res['message']} · {note}" if res["message"] else note
+                notes.append("배정: " + ", ".join(c.name for c in courses))
+            notes += [f"⚠ {w}" for w in warnings]
+            res["message"] = " · ".join(notes)
+            res["warning"] = bool(warnings)
     return results
 
 
@@ -152,6 +157,58 @@ def _course_snapshot(course):
     data = audit.snapshot(course)
     data["professors"] = list(course.professors.values_list("name", flat=True))
     return data
+
+
+def _match_professors(keys, warnings):
+    """아이디(없으면 이름)로 교수를 찾는다. (찾은 교수 목록, 건너뛴 것이 있는지)를 돌려준다."""
+    found, missing, wrong, off, ambiguous = [], [], [], [], []
+    for key in keys:
+        u = User.objects.filter(username__iexact=key).first()
+        if not u:
+            by_name = list(User.objects.filter(name=key, role=User.Role.PROFESSOR))
+            if len(by_name) > 1:
+                ambiguous.append(key)
+                continue
+            u = by_name[0] if by_name else None
+        if not u:
+            missing.append(key)
+        elif u.role != User.Role.PROFESSOR:
+            wrong.append(u.username)
+        elif not u.is_active:
+            off.append(u.username)
+        elif u not in found:
+            found.append(u)
+    if missing:
+        warnings.append(f"아직 없는 교수 아이디라 배정 건너뜀: {', '.join(missing)} "
+                        "(교수 일괄 등록에서 이 과목코드를 넣어 올리면 배정됩니다)")
+    if ambiguous:
+        warnings.append(f"같은 이름의 교수가 여러 명이라 배정 건너뜀: {', '.join(ambiguous)} (아이디로 적어 주세요)")
+    if wrong:
+        warnings.append(f"교수 계정이 아니라 배정 건너뜀: {', '.join(wrong)}")
+    if off:
+        warnings.append(f"사용 중지된 교수 계정이라 배정 건너뜀: {', '.join(off)}")
+    return found, bool(missing or ambiguous or wrong or off)
+
+
+def _match_designer(key, warnings):
+    """교수설계자를 아이디 또는 이름(예: 어복희)으로 찾는다. 못 찾으면 경고를 남기고 None."""
+    u = User.objects.filter(username__iexact=key, role=User.Role.DESIGNER).first()
+    if not u:
+        by_name = list(User.objects.filter(name=key, role=User.Role.DESIGNER))
+        if len(by_name) > 1:
+            warnings.append(f"같은 이름의 교수설계자가 여러 명이라 건너뜀: {key} (아이디로 적어 주세요)")
+            return None
+        u = by_name[0] if by_name else None
+    if not u:
+        if User.objects.filter(username__iexact=key).exists():
+            warnings.append(f"교수설계자 계정이 아니라 건너뜀: {key}")
+        else:
+            warnings.append(f"없는 교수설계자라 건너뜀: {key} (교수설계자 계정을 만든 뒤 다시 올리면 배정됩니다)")
+        return None
+    if not u.is_active:
+        warnings.append(f"사용 중지된 교수설계자 계정이라 건너뜀: {key}")
+        return None
+    return u
 
 
 def parse_courses(actor, text, default_semester=None):
@@ -182,7 +239,7 @@ def parse_courses(actor, text, default_semester=None):
             continue
         res = {"row": i, "semester": sem_name, "code": code, "name": name, "studio": studio_txt,
                "professors": prof_txt, "designer": designer_txt, "active": active_txt,
-               "status": "", "message": "", "data": None}
+               "status": "", "message": "", "warning": False, "data": None}
         results.append(res)
 
         def error(msg, res=res):
@@ -235,42 +292,21 @@ def parse_courses(actor, text, default_semester=None):
         elif not course:
             error("새 과목은 스튜디오가 필요합니다.")
             continue
-        # 담당 교수
-        professors = None  # None이면 그대로 둔다
+        # 담당 교수: 아직 없는 아이디는 경고만 하고 과목은 등록한다 (나중에 교수 CSV로 배정 가능)
+        warnings = []
+        professors, prof_add_only = None, False  # None이면 그대로 둔다
         if prof_txt in CLEAR_WORDS:
             professors = []
         elif prof_txt:
-            ids = _split_ids(prof_txt)
-            found = {u.username.lower(): u for u in User.objects.filter(username__in=ids)}
-            missing = [x for x in ids if x not in found]
-            if missing:
-                error(f"없는 교수 아이디: {', '.join(missing)}")
-                continue
-            wrong = [found[x].username for x in ids if found[x].role != User.Role.PROFESSOR]
-            if wrong:
-                error(f"교수 계정이 아닙니다: {', '.join(wrong)}")
-                continue
-            off = [found[x].username for x in ids if not found[x].is_active]
-            if off:
-                error(f"사용 중지된 교수 계정: {', '.join(off)}")
-                continue
-            professors = list(dict.fromkeys(found[x] for x in ids))
-        # 교수설계자
+            # 일부를 못 찾았으면 기존 배정은 지우지 않고 찾은 교수만 더한다
+            professors, prof_add_only = _match_professors(_split_ids(prof_txt), warnings)
+        # 교수설계자: 아이디 또는 이름. 못 찾으면 경고만 하고 기존 값을 둔다
         designer, set_designer = None, False
         if designer_txt in CLEAR_WORDS:
             set_designer = True
         elif designer_txt:
-            d = User.objects.filter(username__iexact=designer_txt).first()
-            if not d:
-                error(f"없는 교수설계자 아이디: {designer_txt}")
-                continue
-            if d.role != User.Role.DESIGNER:
-                error(f"교수설계자 계정이 아닙니다: {designer_txt}")
-                continue
-            if not d.is_active:
-                error(f"사용 중지된 교수설계자 계정: {designer_txt}")
-                continue
-            designer, set_designer = d, True
+            designer = _match_designer(designer_txt, warnings)
+            set_designer = designer is not None
         # 사용 여부
         active = None
         if active_txt:
@@ -287,8 +323,9 @@ def parse_courses(actor, text, default_semester=None):
             if studio and studio.pk != course.studio_id:
                 changes.append(f"스튜디오 {course.studio.name} → {studio.name}")
             if professors is not None:
-                old = sorted(course.professors.values_list("username", flat=True))
-                if old != sorted(p.username for p in professors):
+                old = set(course.professors.values_list("username", flat=True))
+                new = {p.username for p in professors}
+                if (not new <= old) if prof_add_only else (old != new):
                     changes.append("담당 교수 변경")
             if set_designer and (designer.pk if designer else None) != course.designer_id:
                 changes.append("교수설계자 변경")
@@ -298,11 +335,14 @@ def parse_courses(actor, text, default_semester=None):
             res["message"] = ", ".join(changes)
         else:
             res["status"] = "신규"
+        if warnings:
+            res["warning"] = True
+            res["message"] = " · ".join(([res["message"]] if res["message"] else []) + [f"⚠ {w}" for w in warnings])
         if res["status"] == "변경 없음":
             continue
         res["data"] = {"course": course, "semester": semester, "code": code, "name": name, "studio": studio,
-                       "professors": professors, "designer": designer, "set_designer": set_designer,
-                       "active": active}
+                       "professors": professors, "prof_add_only": prof_add_only,
+                       "designer": designer, "set_designer": set_designer, "active": active}
     return results
 
 
@@ -334,7 +374,10 @@ def apply_courses(actor, results):
                     designer=d["designer"], is_active=True if d["active"] is None else d["active"])
                 action = AuditLog.Action.CREATE
             if d["professors"] is not None:
-                course.professors.set(d["professors"])
+                if d.get("prof_add_only"):
+                    course.professors.add(*d["professors"])
+                else:
+                    course.professors.set(d["professors"])
             audit.log(actor, action, course, before=before, after=_course_snapshot(course))
             n += 1
     return n

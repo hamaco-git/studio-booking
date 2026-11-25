@@ -221,7 +221,9 @@ def users_import(request):
                 request.session["import_result"] = results
                 created = sum(r["status"] == "생성" for r in results)
                 errors = sum(r["status"] == "오류" for r in results)
-                messages.success(request, f"처리 완료: 새 계정 {created}개, 오류 {errors}건.")
+                warned = sum(bool(r.get("warning")) for r in results)
+                messages.success(request, f"처리 완료: 새 계정 {created}개, 오류 {errors}건."
+                                 + (f" 경고 {warned}건(배정 건너뜀)은 비고를 확인해 주세요." if warned else ""))
     return render(request, "manage/users_import.html", {"form": form, "results": results,
                                                          "headers": services.CSV_HEADERS})
 
@@ -288,6 +290,9 @@ def courses_import(request):
     counts = {}
     for r in results or []:
         counts[r["status"]] = counts.get(r["status"], 0) + 1
+    warned = sum(bool(r.get("warning")) for r in results or [])
+    if warned:
+        counts["경고"] = warned
     return render(request, "manage/courses_import.html", {
         "form": form, "results": results, "applied": applied, "counts": counts,
         "can_apply": bool(counts.get("신규") or counts.get("갱신")),
