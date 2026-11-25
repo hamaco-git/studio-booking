@@ -15,7 +15,7 @@
   </select>
 </div>
 <div class="d-flex flex-wrap gap-3 small mb-2">
-  {% for s in studios %}<span><span class="d-inline-block rounded me-1" style="width:12px;height:12px;background:{{ s.color }}"></span>{{ s.code }} 예약</span>{% endfor %}
+  {% for s in studios %}<span><span class="d-inline-block rounded me-1" style="width:12px;height:12px;background:{{ s.color }}"></span>{{ s.short_code }} 예약</span>{% endfor %}
   {% if not user.is_designer %}<span><span class="d-inline-block rounded me-1" style="width:12px;height:12px;background:#d1f0dc;border:1px solid #7ccf9b"></span>예약 가능</span>{% endif %}
   <span><span class="d-inline-block rounded me-1" style="width:12px;height:12px;background:#f8d7da;border:1px solid #f1aeb5"></span>촬영 불가</span>
 </div>

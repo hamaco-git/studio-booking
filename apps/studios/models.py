@@ -1,3 +1,5 @@
+import re
+
 from django.conf import settings
 from django.db import models
 from django.db.models import Q
@@ -26,6 +28,12 @@ class Studio(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def short_code(self):
+        """달력에 쓰는 짧은 표기. studio1 → S1, 규칙에 맞지 않는 코드는 그대로."""
+        m = re.fullmatch(r"studio(\d+)", self.code, flags=re.IGNORECASE)
+        return f"S{m.group(1)}" if m else self.code
 
 
 class StudioStaff(models.Model):
