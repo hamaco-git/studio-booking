@@ -173,10 +173,18 @@ class ImportTest(StaffBase):
         self.upload("이메일,이름\ncp,엑셀교수\n", encoding="cp949")
         self.assertEqual(User.objects.get(username="cp").name, "엑셀교수")
 
-    def test_unknown_course_code_is_error(self):
-        res = self.upload("new2,새교수2,,NOPE\n")
-        self.assertContains(res, "없는 과목코드")
-        self.assertFalse(User.objects.filter(username="new2").exists())
+    def test_unknown_course_code_creates_account_with_warning(self):
+        res = self.upload("new2,새교수2,,NOPE;C1\n")
+        self.assertContains(res, "새 계정 1개, 오류 0건. 경고 1건")
+        self.assertContains(res, "아직 없는 과목코드라 배정 건너뜀: NOPE")
+        self.assertContains(res, "table-warning")
+        u = User.objects.get(username="new2")
+        self.assertEqual(list(u.courses.all()), [self.course])  # 있는 과목은 배정
+
+    def test_codes_without_semester_creates_account_with_warning(self):
+        res = self.upload("new4,새교수4,,C1\n", semester=False)
+        self.assertContains(res, "기준 학기를 고르지 않아")
+        self.assertFalse(User.objects.get(username="new4").courses.exists())
 
     def test_import_phone_normalized_and_validated(self):
         res = self.upload("이메일,이름,휴대폰 번호,과목코드\n"
@@ -284,21 +292,65 @@ class CourseImportTest(StaffBase):
             "2099-9,X1,과목,studio1,,,\n"        # 없는 학기
             "2027-1,X2,과목,studio9,,,\n"        # 없는 스튜디오
             "2027-1,X3,과목,studio2,,,\n"        # 담당이 아닌 스튜디오
-            "2027-1,X4,과목,studio1,nobody,,\n"  # 없는 교수
-            "2027-1,X5,과목,studio1,staff1,,\n"  # 교수가 아님
-            "2027-1,X6,과목,studio1,,kim,\n"     # 교수설계자가 아님
             "2027-1,X7,,studio1,,,\n"            # 과목명 없음
             "2027-1,X8,과목,studio1,,,몰라\n"     # 사용 여부 오류
             "2027-1,OK,정상,studio1,kim,,\n"
             "2027-1,OK,중복,studio1,,,\n")       # 파일 안 중복
-        self.assertContains(res, "오류 9")
-        for msg in ["등록되지 않은 학기", "없는 스튜디오", "담당 스튜디오가 아닙니다", "없는 교수 아이디",
-                    "교수 계정이 아닙니다", "교수설계자 계정이 아닙니다", "과목명이 필요", "사용 여부는",
+        self.assertContains(res, "오류 6")
+        for msg in ["등록되지 않은 학기", "없는 스튜디오", "담당 스튜디오가 아닙니다",
+                    "과목명이 필요", "사용 여부는",
                     "같은 학기·과목코드"]:
             self.assertContains(res, msg)
         self.apply()
         self.assertEqual(list(Course.objects.filter(code__startswith="X")), [])
         self.assertEqual(Course.objects.get(code="OK").name, "정상")
+
+    def test_unknown_people_are_warnings_and_course_is_saved(self):
+        res = self.preview(
+            "2027-1,X4,과목4,studio1,nobody;kim,,\n"  # 없는 교수 → 있는 교수만 배정
+            "2027-1,X5,과목5,studio1,staff1,,\n"      # 교수가 아님
+            "2027-1,X6,과목6,studio1,,kim,\n"         # 교수설계자가 아님
+            "2027-1,X9,과목9,studio1,,어복희,\n")     # 없는 교수설계자
+        self.assertContains(res, "신규 4")
+        self.assertContains(res, "경고 4")
+        for msg in ["아직 없는 교수 아이디라 배정 건너뜀: nobody", "교수 계정이 아니라 배정 건너뜀: staff1",
+                    "교수설계자 계정이 아니라 건너뜀: kim", "없는 교수설계자라 건너뜀: 어복희"]:
+            self.assertContains(res, msg)
+        self.apply()
+        self.assertEqual(list(Course.objects.get(code="X4").professors.all()), [self.prof])
+        self.assertIsNone(Course.objects.get(code="X6").designer)
+
+    def test_designer_matched_by_name(self):
+        res = self.preview("2027-1,C1,,,,설계자,\n")
+        self.assertContains(res, "갱신 1")
+        self.apply()
+        self.course.refresh_from_db()
+        self.assertEqual(self.course.designer, self.designer)
+
+    def test_partial_professors_do_not_remove_existing(self):
+        self.preview("2027-1,C1,,,lee;nobody,,\n")
+        self.apply()
+        self.assertEqual(set(self.course.professors.all()), {self.prof, self.other})
+
+    def test_courses_first_then_professors_fills_assignment(self):
+        self.preview("2027-1,N1,새과목,studio1,newprof,,\n")
+        self.apply()
+        c = Course.objects.get(code="N1")
+        self.assertFalse(c.professors.exists())
+        f = SimpleUploadedFile("p.csv", "아이디,이름,휴대폰 번호,과목코드\nnewprof,새교수,,N1\n".encode(),
+                               content_type="text/csv")
+        res = self.client.post(reverse("manage:users_import"), {"file": f, "semester": c.semester.pk})
+        self.assertContains(res, "새 계정 1개, 오류 0건.")
+        self.assertEqual([u.username for u in c.professors.all()], ["newprof"])
+
+    def test_professors_first_then_courses_fills_assignment(self):
+        f = SimpleUploadedFile("p.csv", "아이디,이름,휴대폰 번호,과목코드\nnewprof,새교수,,N1\n".encode(),
+                               content_type="text/csv")
+        res = self.client.post(reverse("manage:users_import"), {"file": f, "semester": self.course.semester.pk})
+        self.assertContains(res, "경고 1건")
+        self.preview("2027-1,N1,새과목,studio1,newprof,,\n")
+        self.apply()
+        self.assertEqual([u.username for u in Course.objects.get(code="N1").professors.all()], ["newprof"])
 
     def test_staff_cannot_update_other_studio_course(self):
         Course.objects.create(semester=self.course.semester, code="S2", name="남의과목", studio=self.s2)

@@ -10,7 +10,8 @@
       <li>스튜디오는 코드(예: studio1)나 이름(예: Studio 1)으로 적습니다. 담당 교수가 여러 명이면 아이디를 세미콜론(;)으로 구분합니다.</li>
       <li>같은 학기에 같은 과목코드가 있으면 그 과목을 고칩니다. 이때 빈 칸은 기존 값을 그대로 두고, 담당 교수·교수설계자 칸에 <code>-</code>를 쓰면 배정을 지웁니다.</li>
       <li>사용 여부는 "사용" 또는 "중지"로 적고, 비우면 새 과목은 "사용"입니다.</li>
-      <li>교수·교수설계자 계정이 먼저 있어야 합니다. 새 교수는 <a href="{% url 'manage:users_import' %}">교수 일괄 등록</a>에서 과목코드 칸을 비우고 먼저 만들어 주세요.</li>
+      <li>교수설계자는 아이디나 이름(예: 홍길동)으로 적을 수 있습니다.</li>
+      <li>교수 계정과 과목은 <strong>어느 쪽을 먼저 올려도 됩니다.</strong> 아직 없는 교수 아이디나 교수설계자는 <span class="badge text-bg-warning">경고</span>로 표시하고 과목만 등록합니다. 나중에 <a href="{% url 'manage:users_import' %}">교수 일괄 등록</a>에서 과목코드를 넣어 올리면(또는 이 파일을 다시 올리면) 배정이 채워집니다.</li>
       <li>올리면 먼저 <strong>미리보기</strong>가 나오고, "등록하기"를 눌러야 저장됩니다.</li>
     </ol>
     <form method="post" enctype="multipart/form-data">{% csrf_token %}
@@ -26,7 +27,7 @@
     {% if results is not None %}
     <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
       <h2 class="h6 m-0 me-auto">{% if applied %}처리 결과{% else %}미리보기 (아직 저장되지 않았습니다){% endif %}</h2>
-      {% for k, v in counts.items %}<span class="badge {% if k == '오류' %}text-bg-danger{% elif k == '신규' %}text-bg-primary{% elif k == '갱신' %}text-bg-success{% else %}text-bg-secondary{% endif %}">{{ k }} {{ v }}</span>{% endfor %}
+      {% for k, v in counts.items %}<span class="badge {% if k == '오류' %}text-bg-danger{% elif k == '경고' %}text-bg-warning{% elif k == '신규' %}text-bg-primary{% elif k == '갱신' %}text-bg-success{% else %}text-bg-secondary{% endif %}">{{ k }} {{ v }}</span>{% endfor %}
     </div>
     {% if not applied %}
       {% if can_apply %}
@@ -46,7 +47,7 @@
         <thead class="table-light text-nowrap"><tr><th>행</th><th>결과</th><th>학기</th><th>과목코드</th><th>과목명</th><th>스튜디오</th><th>담당 교수</th><th>교수설계자</th><th>사용</th><th>비고</th></tr></thead>
         <tbody>
         {% for r in results %}
-          <tr{% if r.status == '오류' %} class="table-danger"{% elif r.status == '변경 없음' %} class="text-secondary"{% endif %}>
+          <tr{% if r.status == '오류' %} class="table-danger"{% elif r.warning %} class="table-warning"{% elif r.status == '변경 없음' %} class="text-secondary"{% endif %}>
             <td>{{ r.row }}</td><td class="text-nowrap">{{ r.status }}</td><td class="text-nowrap">{{ r.semester }}</td>
             <td>{{ r.code }}</td><td>{{ r.name }}</td><td class="text-nowrap">{{ r.studio }}</td>
             <td>{{ r.professors }}</td><td>{{ r.designer }}</td><td class="text-nowrap">{{ r.active }}</td>
