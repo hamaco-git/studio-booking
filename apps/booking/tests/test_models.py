@@ -79,3 +79,10 @@ class BookingRulesTest(TestCase):
         with self.assertRaisesMessage(ValidationError, "촬영 불가일"):
             self.make().full_clean()
         self.make(slot=self.pm).full_clean()
+
+
+class StudioShortCodeTest(TestCase):
+    def test_short_code(self):
+        self.assertEqual(Studio(code="studio1").short_code, "S1")
+        self.assertEqual(Studio(code="studio12").short_code, "S12")
+        self.assertEqual(Studio(code="vr-room").short_code, "vr-room")

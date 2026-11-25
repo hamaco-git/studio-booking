@@ -108,13 +108,13 @@ def events(request):
         reserved_slot_ids.add(r.slot_id)
         mine = r.professor_id == user.pk
         if show_detail or mine:
-            title = f"{r.studio.code} {r.professor.name} · {r.course.name}"
+            title = f"{r.studio.short_code} {r.professor.name} · {r.course.name}"
             if show_detail and r.status == Reservation.Status.NO_SHOW:
                 title = f"[노쇼] {title}"
             elif show_detail and r.status == Reservation.Status.COMPLETED:
                 title = f"[완료] {title}"
         else:
-            title = f"{r.studio.code} 예약됨"
+            title = f"{r.studio.short_code} 예약됨"
         out.append({
             "id": f"r{r.pk}", "title": title,
             "start": _hhmm(r.date, r.start_time), "end": _hhmm(r.date, r.end_time),
@@ -148,14 +148,14 @@ def events(request):
         if not is_manager and s.date < today:
             continue
         out.append({
-            "id": f"s{s.pk}", "title": " ".join(x for x in [s.studio.code, s.label, "예약 가능"] if x),
+            "id": f"s{s.pk}", "title": " ".join(x for x in [s.studio.short_code, s.label, "예약 가능"] if x),
             "start": _hhmm(s.date, s.start_time), "end": _hhmm(s.date, s.end_time),
             "color": "#d1f0dc", "textColor": "#155d33", "borderColor": "#7ccf9b",
             "extendedProps": {"kind": "slot", "id": s.pk, "studio": s.studio_id, "past": s.date < today},
         })
 
     for b in blackouts:
-        where = b.studio.code if b.studio else "전체"
+        where = b.studio.short_code if b.studio else "전체"
         ev = {
             "id": f"b{b.pk}", "title": f"촬영 불가({where}) {b.reason}".strip(),
             "color": "#f8d7da", "textColor": "#842029", "borderColor": "#f1aeb5",

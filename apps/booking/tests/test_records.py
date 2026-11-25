@@ -166,7 +166,7 @@ class CancelRecordTest(StaffBase):
         self.course.professors.add(self.other)
         data = self.client.get(reverse("booking:events"), {"start": TODAY, "end": TODAY + timedelta(days=1)}).json()
         titles = [e["title"] for e in data if e["extendedProps"]["kind"] == "reservation"]
-        self.assertEqual(titles, ["studio1 예약됨"])
+        self.assertEqual(titles, ["S1 예약됨"])
 
 
 class WorkLogTest(StaffBase):
