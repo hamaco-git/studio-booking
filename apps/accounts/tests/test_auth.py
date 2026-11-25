@@ -47,3 +47,11 @@ class CsrfFailureTest(TestCase):
         self.assertEqual(res.status_code, 403)
         self.assertContains(res, "새로고침 후 다시 시도해 주세요", status_code=403)
         self.assertContains(res, f'href="{reverse("login")}"', status_code=403)
+
+
+class ForcePasswordChangeTest(TestCase):
+    def test_other_pages_redirect_until_changed(self):
+        User.objects.create_user("lee@wcu.ac.kr", password="Init-pass-123", name="이교수")
+        self.client.login(username="lee@wcu.ac.kr", password="Init-pass-123")
+        self.assertRedirects(self.client.get(reverse("booking:book")), reverse("password_change"))
+        self.assertEqual(self.client.get(reverse("password_change")).status_code, 200)
